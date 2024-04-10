@@ -201,7 +201,7 @@ pub fn run_js_with_data(buffer: JsValue, file_type: JsValue, building_id: JsValu
     app.add_plugins(SiteEditor);
 
     if is_site_in_view_mode() {
-        app.add_systems(Startup, set_initial_robot_pose);
+        app.add_systems(Startup, (set_initial_robot_pose,add_locations));
         app.add_systems(Update, update_robot_pose);
     }
 
@@ -430,4 +430,160 @@ fn update_robot_pose(mut cubes: Query<(&mut Transform, &mut Movable)>, timer: Re
 
         index += 1;
     }
+}
+
+
+// fn add_locations(
+//     mut commands: Commands,
+//     asset_server: Res<AssetServer>,
+//     mut materials: ResMut<Assets<ColorMaterial>>
+// ) {
+//     // Load font asset
+//     // let font_handle = asset_server.load("fonts/FiraSans-Bold.ttf");
+//     let locations = vec![
+//         rcc::Location {
+//             name: String::from("charger"),
+//             anchor: (17.651396, -5.108914),
+//         },
+//         rcc::Location {
+//             name: String::from("a"),
+//             anchor: (14.748889, -6.12585),
+//         },
+//         rcc::Location {
+//             name: String::from("b"),
+//             anchor: (10.638771, -7.206345),
+//         },
+//     ];
+    
+//     commands.spawn(Camera2dBundle::default());
+//     for curr_location in locations {
+//         // Extract anchor coordinates
+//         let x = curr_location.anchor.0 as f32;
+//         let y = curr_location.anchor.1 as f32;
+        
+//         commands.spawn(TextBundle {
+//             text: Text::from_section(
+//                 curr_location.name,
+//                 TextStyle {
+//                     font_size: 20.0,
+//                     ..default()
+//                 },
+//             ),
+//             ..default()
+//         }
+//         .with_style(Style {
+//             position_type: PositionType::Absolute,
+//             bottom: Val::Px(x),
+//             right: Val::Px(y),
+            
+//             ..default()
+//         })
+//         );
+//     }
+//     commands.spawn(Camera3dBundle::default());
+
+// }
+
+fn add_locations(
+    mut commands: Commands,
+    asset_server: Res<AssetServer>,
+    mut materials: ResMut<Assets<ColorMaterial>>,
+    mut camera_query: Query<&Transform, With<Camera>>,
+) {
+    // Load font asset (uncomment this if you have a font to load)
+    // let font_handle = asset_server.load("fonts/FiraSans-Bold.ttf");
+
+    let locations = vec![
+        rcc::Location {
+            name: String::from("charger"),
+            anchor: (17.651396, -5.108914, 0.0), // Example 3D coordinates (x, y, z)
+        },
+        rcc::Location {
+            name: String::from("a"),
+            anchor: (14.748889, -6.12585, 0.0), // Example 3D coordinates (x, y, z)
+        },
+        rcc::Location {
+            name: String::from("b"),
+            anchor: (10.638771, -7.206345, 0.0), // Example 3D coordinates (x, y, z)
+        },
+    ];
+    
+    // Iterate over locations and spawn text entities
+    for curr_location in locations {
+        let name = curr_location.name.clone(); // Clone the name for text content
+
+        // Extract anchor coordinates (x, y, z)
+        let x = curr_location.anchor.0 as f32;
+        let y = curr_location.anchor.1 as f32;
+        let z = curr_location.anchor.2 as f32;
+        let mut screen_x : f32 = 0.0;
+        let mut screen_y : f32 = 0.0;
+
+        if let Some(camera_transform) = camera_query.iter().next() {
+            // Convert 3D coordinates to screen coordinates
+            let screen_position = camera_transform.compute_matrix() * Vec4::new(x, y, z, 1.0);
+            screen_x = screen_position.x / screen_position.w;
+            screen_y = screen_position.y / screen_position.w;
+        }
+
+        let text_content = Text::from_section(
+            name.clone(), // Use the location name as the text content
+            TextStyle {
+                font_size: 20.0,
+                color: Color::WHITE,
+                ..Default::default()
+            },
+        );
+
+        log(&format!{"screen : {:?} screen_y : {:?}",screen_x,screen_y});
+        // Spawn text entity at the specified world coordinates
+        commands.spawn(TextBundle {
+            text: text_content.clone(),
+            ..Default::default()
+        }
+        .with_style(Style {
+            position_type: PositionType::Absolute,
+            // bottom: Val::Px(x),
+            // right: Val::Px(y),   
+            left: Val::Px(screen_x),
+            top: Val::Px(-screen_y),             
+            ..default()
+        })
+        );
+
+        commands.spawn(TextBundle {
+            text: text_content.clone(),
+            ..Default::default()
+        }
+        .with_style(Style {
+            position_type: PositionType::Absolute,
+            // bottom: Val::Px(x),
+            // right: Val::Px(y),   
+            left: Val::Px(x),
+            top: Val::Px(y),             
+            ..default()
+        })
+    );
+    }
+}
+
+
+fn two_d_text(mut commands: Commands) {
+    commands.spawn(Camera2dBundle::default());
+    commands.spawn(TextBundle {
+        text: Text::from_section(
+            "Press P to panic",
+            TextStyle {
+                font_size: 60.0,
+                ..default()
+            },
+        ),
+        ..default()
+    }.with_style(Style {
+        position_type: PositionType::Absolute,
+        bottom: Val::Px(17 as f32),
+        right: Val::Px(5 as f32),
+        
+        ..default()
+    }));
 }

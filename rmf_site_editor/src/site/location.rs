@@ -248,6 +248,7 @@ pub fn update_location_for_changed_location_tags(
                     if tag_meshes.charger.is_none() {
                         let id = commands.spawn_empty().id();
                         tag_meshes.charger = Some(id);
+                        
                         (id, assets.charger_material.clone())
                     } else {
                         continue;

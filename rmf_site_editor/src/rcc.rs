@@ -114,3 +114,10 @@ pub fn add_robot_pose_by_id(id: String, pose: RobotPose) {
         ROBOT_POSE.insert(id, pose);
     }
 }
+
+// Define a struct to represent a location with name and anchor coordinates
+#[derive(Debug)]
+pub struct Location {
+    pub name: String,
+    pub anchor: (f64, f64,f64), // Tuple representing (x, y) coordinates
+}
