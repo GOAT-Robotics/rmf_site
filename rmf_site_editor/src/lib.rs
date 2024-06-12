@@ -1,11 +1,15 @@
 use bevy::{log::LogPlugin, pbr::DirectionalLightShadowMap, prelude::*};
 use bevy_egui::EguiPlugin;
+
 use main_menu::MainMenuPlugin;
+
 // use warehouse_generator::WarehouseGeneratorPlugin;
 #[cfg(not(target_arch = "wasm32"))]
 use clap::Parser;
+
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::*;
+use wasm_bindgen::JsValue;
 
 pub mod aabb;
 pub mod animate;
@@ -67,6 +71,8 @@ use bevy::render::{
 };
 pub use osm_slippy_map::*;
 
+use crate::main_menu::WebAutoLoad;
+
 #[cfg_attr(not(target_arch = "wasm32"), derive(Parser))]
 pub struct CommandLineArgs {
     /// Filename of a Site (.site.ron) or Building (.building.yaml) file to load.
@@ -106,17 +112,42 @@ impl AppState {
         })
     }
 }
+#[cfg(target_arch = "wasm32")]
+#[wasm_bindgen]
+extern "C" {
+    #[wasm_bindgen(js_namespace = console)]
+    pub fn log(s: &str);
+
+}
 
 #[cfg(target_arch = "wasm32")]
 #[wasm_bindgen]
 pub fn run_js() {
     extern crate console_error_panic_hook;
     std::panic::set_hook(Box::new(console_error_panic_hook::hook));
+
     run(vec!["web".to_owned()]);
 }
 
+#[cfg(target_arch = "wasm32")]
+#[wasm_bindgen]
+pub fn run_js_with_data(buffer: JsValue) {
+    use js_sys::Uint8Array;
+    log("Running RCC RMF Site Editor with map data");
+
+    let array = Uint8Array::new(&buffer);
+    let bytes: Vec<u8> = array.to_vec();
+
+    let mut app: App = App::new();
+
+    app.insert_resource(WebAutoLoad::file(bytes));
+
+    app.add_plugins(SiteEditor);
+    app.run();
+}
+
 pub fn run(command_line_args: Vec<String>) {
-    let mut app = App::new();
+    let mut app: App = App::new();
 
     #[cfg(not(target_arch = "wasm32"))]
     {
