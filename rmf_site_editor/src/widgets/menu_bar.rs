@@ -272,6 +272,15 @@ pub fn top_menu_bar(
                 if ui.add(Button::new("New").shortcut_text("Ctrl+N")).clicked() {
                     file_events.new_workspace.send(CreateNewWorkspace);
                 }
+                #[cfg(target_arch = "wasm32")]
+                {
+                    if ui
+                        .add(Button::new("Save").shortcut_text("Ctrl+Shift+S"))
+                        .clicked()
+                    {
+                        file_events.save.send(SaveWorkspace::new().to_web());
+                    }
+                }
                 #[cfg(not(target_arch = "wasm32"))]
                 {
                     if ui
@@ -289,12 +298,12 @@ pub fn top_menu_bar(
                         file_events.save.send(SaveWorkspace::new().to_dialog());
                     }
                 }
-                if ui
-                    .add(Button::new("Open").shortcut_text("Ctrl+O"))
-                    .clicked()
-                {
-                    file_events.load_workspace.send(LoadWorkspace::Dialog);
-                }
+                // if ui
+                //     .add(Button::new("Open").shortcut_text("Ctrl+O"))
+                //     .clicked()
+                // {
+                //     file_events.load_workspace.send(LoadWorkspace::Dialog);
+                // }
 
                 render_sub_menu(
                     &menu_params.state,

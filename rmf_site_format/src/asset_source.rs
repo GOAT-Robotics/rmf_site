@@ -31,6 +31,7 @@ use std::path::{Path, PathBuf};
 pub enum AssetSource {
     Local(String),
     Remote(String),
+    RCC(String),
     Search(String),
     Package(String),
 }
@@ -40,6 +41,7 @@ impl AssetSource {
         match self {
             Self::Local(_) => "Local",
             Self::Remote(_) => "Remote",
+            Self::RCC(_) => "RCC",
             Self::Search(_) => "Search",
             Self::Package(_) => "Package",
         }
@@ -84,6 +86,7 @@ impl AssetSource {
     pub unsafe fn as_unvalidated_asset_path(&self) -> String {
         match self {
             AssetSource::Remote(uri) => String::from("rmf-server://") + uri,
+            AssetSource::RCC(uri) => String::from("rcc://") + uri,
             AssetSource::Local(filename) => String::from("file://") + filename,
             AssetSource::Search(name) => String::from("search://") + name,
             AssetSource::Package(path) => String::from("package://") + path,
@@ -119,6 +122,8 @@ impl TryFrom<&str> for AssetSource {
     fn try_from(s: &str) -> Result<Self, Self::Error> {
         if let Some(uri) = s.strip_prefix("rmf-server://") {
             Ok(AssetSource::Remote(uri.to_owned()))
+        } else if let Some(uri) = s.strip_prefix("rcc://") {
+            Ok(AssetSource::RCC(uri.to_owned()))
         } else if let Some(uri) = s.strip_prefix("file://") {
             Ok(AssetSource::Local(uri.to_owned()))
         } else if let Some(uri) = s.strip_prefix("search://") {
@@ -154,6 +159,9 @@ impl Recall for RecallAssetSource {
                 self.filename = Some(name.clone());
             }
             AssetSource::Remote(uri) => {
+                self.remote_uri = Some(uri.clone());
+            }
+            AssetSource::RCC(uri) => {
                 self.remote_uri = Some(uri.clone());
             }
             AssetSource::Search(name) => {

@@ -109,6 +109,24 @@ fn compute_model_source<'a, 'b>(
                     )));
                 }
             }
+            AssetSource::RCC(ref mut p) => {
+                // When working with AssetSource::Remote and AssetSource::Search types, the form is
+                // `Organization/ModelName/path_to_file.ext`, hence we substitute the part after `Organization/`
+                // with the content of the model:// path.
+                // For example: A OpenRobotics/Model1/model.sdf that references to a
+                // model://Model2/mesh.obj would be parsed to OpenRobotics/Model2/mesh.obj
+                // TODO(luca) Should remote and search `AssetSource` objects have a clear split for
+                // organization name and asset name instead of relying on an implicit
+                // Organization/Model syntax?
+                *p = if let Some(org_name) = p.split("/").next() {
+                    org_name.to_owned() + "/" + stripped
+                } else {
+                    return Err(SdfError::UnsupportedAssetSource(format!(
+                        "Unable to extract organization name from asset source [{}]",
+                        subasset_uri
+                    )));
+                }
+            }
             AssetSource::Local(ref mut p) | AssetSource::Package(ref mut p) => {
                 // Search for a model with the requested name in the same folder as the sdf file by
                 // navigating the path up by two levels (removing file name and model folder).

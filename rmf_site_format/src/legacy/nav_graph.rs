@@ -187,12 +187,27 @@ impl NavGraph {
                     }
 
                     let props = NavLaneProperties::from_motion(&lane.forward, door_name.cloned());
+                    let mut door_name = None;
+                    let l0 = [vertices[v0].0, vertices[v0].1];
+                    let l1 = [vertices[v1].0, vertices[v1].1];
+                    for (name, door) in &level_doors {
+                        if segments_intersect(l0, l1, door.endpoints[0], door.endpoints[1]) {
+                            door_name = Some(name);
+                        }
+                    }
+
+                    let props = NavLaneProperties::from_motion(&lane.forward, door_name.cloned());
                     lanes.push(NavLane(v0, v1, props.clone()));
                     match &lane.reverse {
                         ReverseLane::Same => {
                             lanes.push(NavLane(v1, v0, props));
                         }
                         ReverseLane::Different(motion) => {
+                            lanes.push(NavLane(
+                                v1,
+                                v0,
+                                NavLaneProperties::from_motion(motion, door_name.cloned()),
+                            ));
                             lanes.push(NavLane(
                                 v1,
                                 v0,
@@ -210,6 +225,32 @@ impl NavGraph {
                     level.properties.name.clone().0,
                     NavLevel { lanes, vertices },
                 );
+            }
+
+            let mut lifts = HashMap::new();
+            for (_, lift) in &site.lifts {
+                let lift_name = &lift.properties.name.0;
+                let Some(pose) = lift.properties.center(site) else {
+                    println!("ERROR: Skipping lift {lift_name} due to broken anchor reference");
+                    continue;
+                };
+                let Rotation::Yaw(yaw) = pose.rot else {
+                    println!("ERROR: Skipping lift {lift_name} due to rotation not being pure yaw");
+                    continue;
+                };
+                match &lift.properties.cabin {
+                    LiftCabin::Rect(params) => {
+                        lifts.insert(
+                            lift_name.clone(),
+                            NavLift {
+                                position: [pose.trans[0], pose.trans[1], yaw.radians()],
+                                // Note depth and width are inverted between legacy and site editor
+                                dims: [params.depth, params.width],
+                            },
+                        );
+                    }
+                }
+                // TODO(luca) lift property for vertices
             }
 
             graphs.push((
@@ -239,7 +280,7 @@ pub struct NavLane(pub usize, pub usize, pub NavLaneProperties);
 #[derive(Serialize, Deserialize, Clone)]
 pub struct NavLaneProperties {
     pub speed_limit: f32,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub dock_name: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub door_name: Option<String>,
@@ -282,7 +323,6 @@ impl NavVertex {
         Self(p[0], p[1], NavVertexProperties::from_location(location))
     }
 }
-
 #[derive(Serialize, Deserialize, Clone, Default)]
 pub struct NavVertexProperties {
     // TODO(luca) serialize lift and merge_radius, they are currently skipped

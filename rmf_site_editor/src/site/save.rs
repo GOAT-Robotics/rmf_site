@@ -25,13 +25,21 @@ use std::{
 };
 use thiserror::Error as ThisError;
 
-use crate::{recency::RecencyRanking, site::*};
+use crate::{
+    log,
+    main_menu::{SaveToWeb, UploadData, WebAutoLoad},
+    recency::RecencyRanking,
+    save_nav_graph, save_site_map,send_nav_graph_total,
+    site::*,
+};
 use rmf_site_format::*;
+use js_sys::Number;
 
 #[derive(Event)]
 pub struct SaveSite {
     pub site: Entity,
     pub to_file: PathBuf,
+    pub upload: UploadData,
 }
 
 #[derive(Event)]
@@ -1195,53 +1203,99 @@ pub fn generate_site(
     });
 }
 
+// TODO: Make this available in web
 pub fn save_site(world: &mut World) {
     let save_events: Vec<_> = world.resource_mut::<Events<SaveSite>>().drain().collect();
     for save_event in save_events {
-        let mut new_path = save_event.to_file;
-        let path_str = match new_path.to_str() {
-            Some(s) => s,
-            None => {
-                error!("Unable to save file: Invalid path [{new_path:?}]");
-                continue;
-            }
-        };
-        if path_str.ends_with(".building.yaml") {
-            warn!("Detected old file format, converting to new format");
-            new_path = path_str.replace(".building.yaml", ".site.ron").into();
-        } else if !path_str.ends_with("site.ron") {
-            info!("Appending .site.ron to {}", new_path.display());
-            new_path = new_path.with_extension("site.ron");
-        }
-        info!("Saving to {}", new_path.display());
-        let f = match std::fs::File::create(new_path.clone()) {
-            Ok(f) => f,
-            Err(err) => {
-                error!("Unable to save file: {err}");
-                continue;
-            }
-        };
+        #[cfg(target_arch = "wasm32")]
+        {
+            let building_id: String = save_event.upload.building_id.unwrap();
 
-        let old_default_path = world.get::<DefaultFile>(save_event.site).cloned();
-        migrate_relative_paths(save_event.site, &new_path, world);
-
-        let site = match generate_site(world, save_event.site) {
-            Ok(site) => site,
-            Err(err) => {
-                error!("Unable to compile site: {err}");
-                continue;
-            }
-        };
-
-        match site.to_writer(f) {
-            Ok(()) => {
-                info!("Save successful");
-            }
-            Err(err) => {
-                if let Some(old_default_path) = old_default_path {
-                    world.entity_mut(save_event.site).insert(old_default_path);
+            log("save_site - Saving site event from web");
+            let site = match generate_site(world, save_event.site) {
+                Ok(site) => site,
+                Err(err) => {
+                    error!("Unable to compile site: {err}");
+                    continue;
                 }
-                error!("Save failed: {err}");
+            };
+
+            // convert site to json
+            let site_json = match serde_json::to_string(&site) {
+                Ok(json) => json,
+                Err(err) => {
+                    error!("Unable to convert site to json: {err}");
+                    continue;
+                }
+            };
+
+            let total = legacy::nav_graph::NavGraph::from_site(&site).len();
+            let js_number = Number::from(total as f64);
+            send_nav_graph_total(&js_number);
+
+            for (name, nav_graph) in legacy::nav_graph::NavGraph::from_site(&site) {
+                // convert to yaml using serde yaml
+                let nav_graph_json = match serde_json::to_string(&nav_graph) {
+                    Ok(json) => json,
+                    Err(err) => {
+                        error!("Unable to convert nav graph to json: {err}");
+                        continue;
+                    }
+                };
+                save_nav_graph(&building_id, name.as_str(), nav_graph_json.as_str());
+            }
+
+            // send site to web
+            save_site_map(&building_id, site_json.as_str());
+        }
+
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            let mut new_path = save_event.to_file;
+            let path_str = match new_path.to_str() {
+                Some(s) => s,
+                None => {
+                    error!("Unable to save file: Invalid path [{new_path:?}]");
+                    continue;
+                }
+            };
+            if path_str.ends_with(".building.yaml") {
+                warn!("Detected old file format, converting to new format");
+                new_path = path_str.replace(".building.yaml", ".site.ron").into();
+            } else if !path_str.ends_with("site.ron") {
+                info!("Appending .site.ron to {}", new_path.display());
+                new_path = new_path.with_extension("site.ron");
+            }
+            info!("Saving to {}", new_path.display());
+            let f = match std::fs::File::create(new_path.clone()) {
+                Ok(f) => f,
+                Err(err) => {
+                    error!("Unable to save file: {err}");
+                    continue;
+                }
+            };
+
+            let old_default_path = world.get::<DefaultFile>(save_event.site).cloned();
+            migrate_relative_paths(save_event.site, &new_path, world);
+
+            let site = match generate_site(world, save_event.site) {
+                Ok(site) => site,
+                Err(err) => {
+                    error!("Unable to compile site: {err}");
+                    continue;
+                }
+            };
+
+            match site.to_writer(f) {
+                Ok(()) => {
+                    info!("Save successful");
+                }
+                Err(err) => {
+                    if let Some(old_default_path) = old_default_path {
+                        world.entity_mut(save_event.site).insert(old_default_path);
+                    }
+                    error!("Save failed: {err}");
+                }
             }
         }
     }
@@ -1254,6 +1308,9 @@ pub fn save_nav_graphs(world: &mut World) {
         .collect();
     for save_event in save_events {
         let path = save_event.to_file;
+
+        #[cfg(target_arch = "wasm32")]
+        log("Saving nav graphs event");
 
         let mut site = match generate_site(world, save_event.site) {
             Ok(site) => site,

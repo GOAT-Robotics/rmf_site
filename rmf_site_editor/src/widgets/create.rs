@@ -14,10 +14,11 @@
  * limitations under the License.
  *
 */
-
 use crate::{
+    get_map_list,
     inspector::{InspectAssetSource, InspectScale},
     interaction::{ChangeMode, SelectAnchor, SelectAnchor3D},
+    rcc::{self, load_milestones, MAP_INDEX},
     site::{DefaultFile, DrawingBundle, Recall},
     AppEvents, AppState,
 };
@@ -26,7 +27,7 @@ use bevy_egui::egui::{CollapsingHeader, Ui};
 
 use rmf_site_format::{DrawingProperties, Geometry, Model, WorkcellModel};
 
-#[derive(SystemParam)]
+#[derive(SystemParam, Debug)]
 pub struct CreateParams<'w, 's> {
     pub default_file: Query<'w, 's, &'static DefaultFile>,
 }
@@ -90,6 +91,7 @@ impl<'a, 'w1, 'w2, 's1, 's2> CreateWidget<'a, 'w1, 'w2, 's1, 's2> {
                     }
 
                     ui.add_space(10.0);
+                    unsafe { rcc::SHOW_MAP_ASSET_SOURCE = 1 };
                     CollapsingHeader::new("New drawing")
                         .default_open(false)
                         .show(ui, |ui| {
@@ -116,13 +118,47 @@ impl<'a, 'w1, 'w2, 's1, 's2> CreateWidget<'a, 'w1, 'w2, 's1, 's2> {
                             }
                             ui.add_space(5.0);
                             if ui.button("Add Drawing").clicked() {
-                                self.events
-                                    .commands
-                                    .spawn(DrawingBundle::new(DrawingProperties {
-                                        source: self.events.display.pending_drawings.source.clone(),
-                                        ..default()
-                                    }));
+                                let is_rccmap = self
+                                    .events
+                                    .display
+                                    .pending_drawings
+                                    .source
+                                    .clone()
+                                    .label()
+                                    .eq("RCC");
+                                if is_rccmap {
+                                    let map_list = get_map_list().clone();
+
+                                    unsafe {
+                                        let map =
+                                            match rcc::parse_js_value(&map_list.get(MAP_INDEX)) {
+                                                Ok(data) => data,
+                                                Err(_) => return,
+                                            };
+
+                                        let current_level =
+                                            match &self.events.request.current_level.0 {
+                                                Some(s) => *s,
+                                                None => return,
+                                            };
+                                        let mut level = current_level.index()..;
+                                        load_milestones(map, &mut level, &mut self.events.commands);
+                                    }
+                                } else {
+                                    self.events.commands.spawn(DrawingBundle::new(
+                                        DrawingProperties {
+                                            source: self
+                                                .events
+                                                .display
+                                                .pending_drawings
+                                                .source
+                                                .clone(),
+                                            ..default()
+                                        },
+                                    ));
+                                }
                             }
+                            unsafe { rcc::SHOW_MAP_ASSET_SOURCE = 0 };
                         });
                 }
                 AppState::SiteDrawingEditor => {

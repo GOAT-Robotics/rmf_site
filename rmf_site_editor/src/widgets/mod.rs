@@ -38,6 +38,7 @@ use bevy_egui::{
     EguiContexts,
 };
 use rmf_site_format::*;
+use crate::rcc::is_site_in_view_mode;
 
 pub mod create;
 use create::*;
@@ -333,88 +334,91 @@ fn site_ui_layout(
     top_level_components: Query<(), Without<Parent>>,
     mut menu_params: MenuParams,
 ) {
-    egui::SidePanel::right("right_panel")
-        .resizable(true)
-        .default_width(300.0)
-        .show(egui_context.ctx_mut(), |ui| {
-            egui::ScrollArea::both()
-                .auto_shrink([false, false])
-                .show(ui, |ui| {
-                    ui.vertical(|ui| {
-                        CollapsingHeader::new("Levels")
-                            .default_open(true)
-                            .show(ui, |ui| {
-                                ViewLevels::new(&levels, &mut events)
-                                    .for_editing_visibility()
-                                    .show(ui);
-                            });
-                        ui.separator();
-                        CollapsingHeader::new("Navigation Graphs")
-                            .default_open(true)
-                            .show(ui, |ui| {
-                                ViewNavGraphs::new(&nav_graphs, &mut events).show(ui, &open_sites);
-                            });
-                        ui.separator();
-                        // TODO(MXG): Consider combining Nav Graphs and Layers
-                        CollapsingHeader::new("Layers")
-                            .default_open(false)
-                            .show(ui, |ui| {
-                                ViewLayers::new(&layers, &mut events).show(ui);
-                            });
-                        ui.separator();
-                        CollapsingHeader::new("Inspect")
-                            .default_open(true)
-                            .show(ui, |ui| {
-                                InspectorWidget::new(&inspector_params, &mut events).show(ui);
-                            });
-                        ui.separator();
-                        CollapsingHeader::new("Create")
-                            .default_open(false)
-                            .show(ui, |ui| {
-                                CreateWidget::new(&create_params, &mut events).show(ui);
-                            });
-                        ui.separator();
-                        CollapsingHeader::new("Groups")
-                            .default_open(false)
-                            .show(ui, |ui| {
-                                ViewGroups::new(&mut groups, &mut events).show(ui);
-                            });
-                        ui.separator();
-                        CollapsingHeader::new("Lights")
-                            .default_open(false)
-                            .show(ui, |ui| {
-                                ViewLights::new(&lights, &mut events).show(ui);
-                            });
-                        ui.separator();
-                        CollapsingHeader::new("Occupancy")
-                            .default_open(false)
-                            .show(ui, |ui| {
-                                ViewOccupancy::new(&mut events).show(ui);
-                            });
-                        if ui.add(Button::new("Building preview")).clicked() {
-                            events.next_app_state.set(AppState::SiteVisualizer);
-                        }
+    if !is_site_in_view_mode() {
+        egui::SidePanel::right("right_panel")
+            .resizable(true)
+            .default_width(300.0)
+            .show(egui_context.ctx_mut(), |ui| {
+                egui::ScrollArea::both()
+                    .auto_shrink([false, false])
+                    .show(ui, |ui| {
+                        ui.vertical(|ui| {
+                            CollapsingHeader::new("Levels")
+                                .default_open(true)
+                                .show(ui, |ui| {
+                                    ViewLevels::new(&levels, &mut events)
+                                        .for_editing_visibility()
+                                        .show(ui);
+                                });
+                            ui.separator();
+                            CollapsingHeader::new("Navigation Graphs")
+                                .default_open(true)
+                                .show(ui, |ui| {
+                                    ViewNavGraphs::new(&nav_graphs, &mut events)
+                                        .show(ui, &open_sites);
+                                });
+                            ui.separator();
+                            // TODO(MXG): Consider combining Nav Graphs and Layers
+                            CollapsingHeader::new("Layers")
+                                .default_open(false)
+                                .show(ui, |ui| {
+                                    ViewLayers::new(&layers, &mut events).show(ui);
+                                });
+                            ui.separator();
+                            CollapsingHeader::new("Inspect")
+                                .default_open(true)
+                                .show(ui, |ui| {
+                                    InspectorWidget::new(&inspector_params, &mut events).show(ui);
+                                });
+                            ui.separator();
+                            CollapsingHeader::new("Create")
+                                .default_open(false)
+                                .show(ui, |ui| {
+                                    CreateWidget::new(&create_params, &mut events).show(ui);
+                                });
+                            ui.separator();
+                            CollapsingHeader::new("Groups")
+                                .default_open(false)
+                                .show(ui, |ui| {
+                                    ViewGroups::new(&mut groups, &mut events).show(ui);
+                                });
+                            ui.separator();
+                            CollapsingHeader::new("Lights")
+                                .default_open(false)
+                                .show(ui, |ui| {
+                                    ViewLights::new(&lights, &mut events).show(ui);
+                                });
+                            ui.separator();
+                            CollapsingHeader::new("Occupancy")
+                                .default_open(false)
+                                .show(ui, |ui| {
+                                    ViewOccupancy::new(&mut events).show(ui);
+                                });
+                            if ui.add(Button::new("Building preview")).clicked() {
+                                events.next_app_state.set(AppState::SiteVisualizer);
+                            }
+                        });
                     });
-                });
-        });
+            });
 
-    top_menu_bar(
-        egui_context.ctx_mut(),
-        &mut events.file_events,
-        &file_menu,
-        &top_level_components,
-        &children,
-        &mut menu_params,
-    );
+        top_menu_bar(
+            egui_context.ctx_mut(),
+            &mut events.file_events,
+            &file_menu,
+            &top_level_components,
+            &children,
+            &mut menu_params,
+        );
 
-    egui::TopBottomPanel::bottom("log_console")
-        .resizable(true)
-        .min_height(30.)
-        .max_height(300.)
-        .show(egui_context.ctx_mut(), |ui| {
-            ui.add_space(10.0);
-            ConsoleWidget::new(&mut events).show(ui);
-        });
+        egui::TopBottomPanel::bottom("log_console")
+            .resizable(true)
+            .min_height(30.)
+            .max_height(300.)
+            .show(egui_context.ctx_mut(), |ui| {
+                ui.add_space(10.0);
+                ConsoleWidget::new(&mut events).show(ui);
+            });
+    }
 
     if events.file_events.diagnostic_window.show {
         egui::SidePanel::left("diagnostic_window")
@@ -497,23 +501,25 @@ fn site_drawing_ui_layout(
                 });
         });
 
-    egui::TopBottomPanel::bottom("log_console")
-        .resizable(true)
-        .min_height(30.)
-        .max_height(300.)
-        .show(egui_context.ctx_mut(), |ui| {
-            ui.add_space(10.0);
-            ConsoleWidget::new(&mut events).show(ui);
-        });
+    if !is_site_in_view_mode() {
+        egui::TopBottomPanel::bottom("log_console")
+            .resizable(true)
+            .min_height(30.)
+            .max_height(300.)
+            .show(egui_context.ctx_mut(), |ui| {
+                ui.add_space(10.0);
+                ConsoleWidget::new(&mut events).show(ui);
+            });
 
-    top_menu_bar(
-        egui_context.ctx_mut(),
-        &mut events.file_events,
-        &file_menu,
-        &top_level_components,
-        &children,
-        &mut menu_params,
-    );
+        top_menu_bar(
+            egui_context.ctx_mut(),
+            &mut events.file_events,
+            &file_menu,
+            &top_level_components,
+            &children,
+            &mut menu_params,
+        );
+    }
 
     let egui_context = egui_context.ctx_mut();
     let ui_has_focus = egui_context.wants_pointer_input()
@@ -543,7 +549,8 @@ fn site_visualizer_ui_layout(
     children: Query<&Children>,
     mut menu_params: MenuParams,
 ) {
-    egui::SidePanel::right("right_panel")
+    if !is_site_in_view_mode() {
+        egui::SidePanel::right("right_panel")
         .resizable(true)
         .default_width(300.0)
         .show(egui_context.ctx_mut(), |ui| {
@@ -578,23 +585,24 @@ fn site_visualizer_ui_layout(
                 });
         });
 
-    egui::TopBottomPanel::bottom("log_console")
-        .resizable(true)
-        .min_height(30.)
-        .max_height(300.)
-        .show(egui_context.ctx_mut(), |ui| {
-            ui.add_space(10.0);
-            ConsoleWidget::new(&mut events).show(ui);
-        });
+        egui::TopBottomPanel::bottom("log_console")
+            .resizable(true)
+            .min_height(30.)
+            .max_height(300.)
+            .show(egui_context.ctx_mut(), |ui| {
+                ui.add_space(10.0);
+                ConsoleWidget::new(&mut events).show(ui);
+            });
 
-    top_menu_bar(
-        egui_context.ctx_mut(),
-        &mut events.file_events,
-        &file_menu,
-        &top_level_components,
-        &children,
-        &mut menu_params,
-    );
+        top_menu_bar(
+            egui_context.ctx_mut(),
+            &mut events.file_events,
+            &file_menu,
+            &top_level_components,
+            &children,
+            &mut menu_params,
+        );
+    }
 
     let egui_context = egui_context.ctx_mut();
     let ui_has_focus = egui_context.wants_pointer_input()
@@ -648,23 +656,25 @@ fn workcell_ui_layout(
                 });
         });
 
-    egui::TopBottomPanel::bottom("log_console")
-        .resizable(true)
-        .min_height(30.)
-        .max_height(300.)
-        .show(egui_context.ctx_mut(), |ui| {
-            ui.add_space(10.0);
-            ConsoleWidget::new(&mut events).show(ui);
-        });
+    if !is_site_in_view_mode() {
+        egui::TopBottomPanel::bottom("log_console")
+            .resizable(true)
+            .min_height(30.)
+            .max_height(300.)
+            .show(egui_context.ctx_mut(), |ui| {
+                ui.add_space(10.0);
+                ConsoleWidget::new(&mut events).show(ui);
+            });
 
-    top_menu_bar(
-        egui_context.ctx_mut(),
-        &mut events.file_events,
-        &file_menu,
-        &top_level_components,
-        &children,
-        &mut menu_params,
-    );
+        top_menu_bar(
+            egui_context.ctx_mut(),
+            &mut events.file_events,
+            &file_menu,
+            &top_level_components,
+            &children,
+            &mut menu_params,
+        );
+    }
 
     if events.new_model.asset_gallery_status.show {
         egui::SidePanel::left("asset_gallery")
