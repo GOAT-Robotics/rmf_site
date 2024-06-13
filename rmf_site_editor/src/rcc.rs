@@ -35,12 +35,13 @@ pub struct YamlData {
 pub struct Marker {
     pub x: f32,
     pub y: f32,
-    pub meta: Meta,
+    pub props: Props,
 }
 
 #[derive(Debug, Deserialize, PartialEq)]
-pub struct Meta {
-    pub name: String,
+pub struct Props {
+    pub text: String,
+    pub is_charger: bool,
 }
 
 #[derive(Debug, Deserialize, PartialEq)]
@@ -156,7 +157,6 @@ pub fn load_milestones(map: Maps, level: &mut RangeFrom<u32>, commands: &mut Com
     let mut anchors: BTreeMap<u32, Anchor> = BTreeMap::new();
     let mut locations = BTreeMap::new();
 
-    let mut initial = true;
     let mut tags = Vec::new();
     tags.push(LocationTag::Charger);
 
@@ -172,15 +172,14 @@ pub fn load_milestones(map: Maps, level: &mut RangeFrom<u32>, commands: &mut Com
         );
 
         let mut location = Location {
-            name: NameInSite(marker.1.meta.name.clone()),
+            name: NameInSite(marker.1.props.text.clone()),
             graphs: rmf_site_format::AssociatedGraphs::All,
             anchor: rmf_site_format::Point(anchor),
             tags: default(),
         };
 
-        if initial {
+        if marker.1.props.is_charger {
             location.tags = rmf_site_format::LocationTags(tags.clone());
-            initial = false;
         }
 
         locations.insert(level.next().unwrap(), location);
