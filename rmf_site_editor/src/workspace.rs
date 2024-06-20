@@ -17,7 +17,6 @@
 
 use bevy::{prelude::*, tasks::AsyncComputeTaskPool};
 use rfd::AsyncFileDialog;
-use std::collections::BTreeMap;
 use std::path::PathBuf;
 
 use crate::interaction::InteractionState;
@@ -26,7 +25,7 @@ use crate::site::{DefaultFile, LoadSite, SaveSite};
 use crate::workcell::{LoadWorkcell, SaveWorkcell};
 use crate::{log, AppState};
 use rmf_site_format::legacy::building_map::BuildingMap;
-use rmf_site_format::{Level, NameOfSite, Site, SiteProperties, Workcell};
+use rmf_site_format::{NameOfSite, Site, Workcell};
 
 use crossbeam_channel::{Receiver, Sender};
 
@@ -55,6 +54,7 @@ pub struct WorkspaceMarker;
 #[derive(Event)]
 pub enum LoadWorkspace {
     Dialog,
+    BlankFromDialog,
     Path(PathBuf),
     Data(WorkspaceData),
 }
@@ -65,6 +65,7 @@ pub enum WorkspaceData {
     Site(Vec<u8>),
     Workcell(Vec<u8>),
     WorkcellUrdf(Vec<u8>),
+    LoadSite(LoadSite),
 }
 
 impl WorkspaceData {
@@ -239,19 +240,14 @@ pub fn dispatch_new_workspace_events(
     mut load_site: EventWriter<LoadSite>,
     mut load_workcell: EventWriter<LoadWorkcell>,
 ) {
-    if let Some(_cmd) = new_workspace.iter().last() {
+    if let Some(_cmd) = new_workspace.read().last() {
         match state.get() {
             AppState::MainMenu => {
                 error!("Sent generic new workspace while in main menu");
             }
             AppState::SiteEditor | AppState::SiteDrawingEditor | AppState::SiteVisualizer => {
-                let mut levels = BTreeMap::new();
-                levels.insert(0, Level::default());
                 load_site.send(LoadSite {
-                    site: Site {
-                        levels,
-                        ..default()
-                    },
+                    site: Site::blank_L1("new".to_owned()),
                     focus: true,
                     default_file: None,
                 });
@@ -271,7 +267,7 @@ pub fn dispatch_load_workspace_events(
     load_channels: Res<LoadWorkspaceChannels>,
     mut load_workspace: EventReader<LoadWorkspace>,
 ) {
-    if let Some(cmd) = load_workspace.iter().last() {
+    if let Some(cmd) = load_workspace.read().last() {
         match cmd {
             LoadWorkspace::Dialog => {
                 let sender = load_channels.sender.clone();
@@ -291,6 +287,35 @@ pub fn dispatch_load_workspace_events(
                         }
                     })
                     .detach();
+            }
+            LoadWorkspace::BlankFromDialog => {
+                let sender = load_channels.sender.clone();
+                #[cfg(not(target_arch = "wasm32"))]
+                {
+                    AsyncComputeTaskPool::get()
+                        .spawn(async move {
+                            if let Some(file) = AsyncFileDialog::new().save_file().await {
+                                let file = file.path().to_path_buf();
+                                let name = file
+                                    .file_stem()
+                                    .map(|s| s.to_str().map(|s| s.to_owned()))
+                                    .flatten()
+                                    .unwrap_or_else(|| "blank".to_owned());
+                                let data = WorkspaceData::LoadSite(LoadSite::blank_L1(
+                                    name,
+                                    Some(file.clone()),
+                                ));
+                                let _ = sender.send(LoadWorkspaceFile(Some(file), data));
+                            }
+                        })
+                        .detach();
+                }
+                #[cfg(target_arch = "wasm32")]
+                {
+                    let data =
+                        WorkspaceData::LoadSite(LoadSite::blank_L1("blank".to_owned(), None));
+                    sender.send(LoadWorkspaceFile(None, data));
+                }
             }
             LoadWorkspace::Path(path) => {
                 if let Ok(data) = std::fs::read(&path) {
@@ -422,6 +447,11 @@ fn workspace_file_load_complete(
                     }
                 }
             }
+            WorkspaceData::LoadSite(site) => {
+                app_state.set(AppState::SiteEditor);
+                load_site.send(site);
+                interaction_state.set(InteractionState::Enable);
+            }
         }
     }
 }
@@ -451,7 +481,7 @@ fn dispatch_save_workspace_events(
             })
             .detach();
     };
-    for event in save_events.iter() {
+    for event in save_events.read() {
         if let Some(ws_root) = workspace.root {
             match &event.destination {
                 SaveWorkspaceDestination::DefaultFile => {

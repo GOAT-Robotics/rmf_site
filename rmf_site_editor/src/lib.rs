@@ -1,7 +1,10 @@
 extern crate console_error_panic_hook;
 
 use bevy::{
-    log::LogPlugin, pbr::DirectionalLightShadowMap, prelude::*, render::{mesh::shape::Cube, renderer::RenderAdapterInfo},
+    log::LogPlugin,
+    pbr::DirectionalLightShadowMap,
+    prelude::*,
+    render::{mesh::shape::Cube, renderer::RenderAdapterInfo},
 };
 use bevy_egui::EguiPlugin;
 
@@ -19,11 +22,14 @@ use wasm_bindgen::JsValue;
 pub mod aabb;
 pub mod animate;
 
+pub mod asset_loaders;
+use asset_loaders::*;
+
 pub mod keyboard;
 use keyboard::*;
 
 pub mod widgets;
-use widgets::{menu_bar::MenuPluginManager, *};
+use widgets::*;
 pub mod occupancy;
 use occupancy::OccupancyPlugin;
 pub mod issue;
@@ -50,7 +56,7 @@ use workspace::*;
 pub mod sdf_loader;
 
 pub mod site_asset_io;
-pub mod urdf_loader;
+//pub mod urdf_loader;
 use sdf_loader::*;
 
 pub mod view_menu;
@@ -78,7 +84,7 @@ pub mod rcc;
 use crate::main_menu::UploadData;
 use crate::main_menu::WebAutoLoad;
 
-use crate::rcc::{set_site_mode,is_site_in_view_mode};
+use crate::rcc::{is_site_in_view_mode, set_site_mode};
 
 // Define a struct to keep some information about our entity.
 // Here it's an arbitrary movement speed, the spawn location, and a maximum distance from it.
@@ -186,7 +192,6 @@ pub fn run_js_with_data(buffer: JsValue, file_type: JsValue, building_id: JsValu
     #[cfg(target_arch = "wasm32")]
     log("Running RCC RMF Site Editor with map data");
     set_site_mode();
-    
 
     let array = Uint8Array::new(&buffer);
     let bytes: Vec<u8> = array.to_vec();
@@ -226,25 +231,23 @@ pub fn run_js_new_site(building_id: JsValue) {
 
 #[cfg(target_arch = "wasm32")]
 #[wasm_bindgen]
-pub fn send_robot_pose(robot_id: JsValue,robot_pose: js_sys::Object) {
+pub fn send_robot_pose(robot_id: JsValue, robot_pose: js_sys::Object) {
     panic::set_hook(Box::new(console_error_panic_hook::hook));
 
     #[cfg(target_arch = "wasm32")]
     let robot_id: String = robot_id.as_string().unwrap();
-   
-   
+
     match rcc::parse_robot_pose(&robot_pose) {
-        Ok(obj)=>{
-            rcc::add_robot_pose_by_id(robot_id,obj);
-        },
-        Err(err)=>{
+        Ok(obj) => {
+            rcc::add_robot_pose_by_id(robot_id, obj);
+        }
+        Err(err) => {
             #[cfg(target_arch = "wasm32")]
             {
-                log( &format!("Error parsing  robot pose: {}", err));
+                log(&format!("Error parsing  robot pose: {}", err));
             }
         }
     }
-
 }
 
 pub fn run(command_line_args: Vec<String>) {
@@ -270,74 +273,52 @@ pub struct SiteEditor;
 
 impl Plugin for SiteEditor {
     fn build(&self, app: &mut App) {
-        #[cfg(target_arch = "wasm32")]
-        {
-            app.add_plugins(
-                DefaultPlugins
-                    .build()
-                    .disable::<LogPlugin>()
-                    .set(WindowPlugin {
-                        primary_window: Some(Window {
-                            title: "RCC RMF Site Editor".to_owned(),
-                            canvas: Some(String::from("#rmf_site_editor_canvas")),
-                            fit_canvas_to_parent: true,
-                            ..default()
-                        }),
+        app.add_plugins((
+            SiteAssetIoPlugin,
+            DefaultPlugins
+                .build()
+                .disable::<LogPlugin>()
+                .set(WindowPlugin {
+                    primary_window: Some(Window {
+                        title: "RCC Site Editor".to_owned(),
+                        #[cfg(not(target_arch = "wasm32"))]
+                        resolution: (1600., 900.).into(),
+                        #[cfg(target_arch = "wasm32")]
+                        canvas: Some(String::from("#rmf_site_editor_canvas")),
+                        #[cfg(target_arch = "wasm32")]
+                        fit_canvas_to_parent: true,
                         ..default()
-                    })
-                    .set(ImagePlugin {
-                        default_sampler: SamplerDescriptor {
-                            address_mode_u: AddressMode::Repeat,
-                            address_mode_v: AddressMode::Repeat,
-                            address_mode_w: AddressMode::Repeat,
-                            ..Default::default()
-                        },
-                    })
-                    .add_after::<bevy::asset::AssetPlugin, _>(SiteAssetIoPlugin),
-            );
-        }
-
-        #[cfg(not(target_arch = "wasm32"))]
-        {
-            app.add_plugins(
-                DefaultPlugins
-                    .build()
-                    .disable::<LogPlugin>()
-                    .set(WindowPlugin {
-                        primary_window: Some(Window {
-                            title: "RMF Site Editor".to_owned(),
-                            resolution: (1600., 900.).into(),
-                            ..default()
-                        }),
+                    }),
+                    ..default()
+                })
+                .set(ImagePlugin {
+                    default_sampler: SamplerDescriptor {
+                        address_mode_u: AddressMode::Repeat,
+                        address_mode_v: AddressMode::Repeat,
+                        address_mode_w: AddressMode::Repeat,
+                        ..Default::default()
+                    }
+                    .into(),
+                })
+                .set(RenderPlugin {
+                    render_creation: WgpuSettings {
+                        #[cfg(not(target_arch = "wasm32"))]
+                        features: WgpuFeatures::POLYGON_MODE_LINE,
                         ..default()
-                    })
-                    .set(ImagePlugin {
-                        default_sampler: SamplerDescriptor {
-                            address_mode_u: AddressMode::Repeat,
-                            address_mode_v: AddressMode::Repeat,
-                            address_mode_w: AddressMode::Repeat,
-                            ..Default::default()
-                        },
-                    })
-                    .set(RenderPlugin {
-                        wgpu_settings: WgpuSettings {
-                            features: WgpuFeatures::POLYGON_MODE_LINE,
-                            ..default()
-                        },
-                        ..default()
-                    })
-                    .add_after::<bevy::asset::AssetPlugin, _>(SiteAssetIoPlugin),
-            );
-        }
+                    }
+                    .into(),
+                    ..default()
+                }),
+        ));
 
         app.insert_resource(DirectionalLightShadowMap { size: 2048 })
             .add_state::<AppState>()
             .add_plugins((
+                AssetLoadersPlugin,
                 LogHistoryPlugin,
                 AabbUpdatePlugin,
                 EguiPlugin,
                 KeyboardInputPlugin,
-                SdfPlugin,
                 MainMenuPlugin,
                 WorkcellEditorPlugin,
                 SitePlugin,
@@ -354,6 +335,10 @@ impl Plugin for SiteEditor {
                 OSMViewPlugin,
                 SiteWireframePlugin,
             ));
+        // Ref https://github.com/bevyengine/bevy/issues/10877. The default behavior causes issues
+        // with events being accumulated when not read (i.e. scrolling mouse wheel on a UI widget).
+        app.world
+            .remove_resource::<bevy::ecs::event::EventUpdateSignal>();
     }
 }
 
@@ -363,16 +348,16 @@ fn set_initial_robot_pose(mut commands: Commands, mut meshes: ResMut<Assets<Mesh
 
     for i in 0..robot_list.length() {
         match rcc::parse_robot_data(&robot_list.get(i)) {
-            Ok(robot_id)=>{
+            Ok(robot_id) => {
                 //Add robot to the hashMap for later use
                 rcc::add_robot_in_robot_list(&robot_id, i);
 
-                 //Get robot's initial pose
-                 let robot_pose = get_robot_initial_pose(&robot_id);
+                //Get robot's initial pose
+                let robot_pose = get_robot_initial_pose(&robot_id);
 
-                 //Parse robot's pose & spawn
-                 match rcc::parse_robot_pose(&robot_pose) {
-                    Ok(obj)=>{
+                //Parse robot's pose & spawn
+                match rcc::parse_robot_pose(&robot_pose) {
+                    Ok(obj) => {
                         commands.spawn((
                             PbrBundle {
                                 mesh: meshes.add(Mesh::from(shape::Cube {
@@ -383,47 +368,42 @@ fn set_initial_robot_pose(mut commands: Commands, mut meshes: ResMut<Assets<Mesh
                             },
                             Movable::new(entity_spawn),
                         ));
-                    },
-                    Err(err)=>{
+                    }
+                    Err(err) => {
                         #[cfg(target_arch = "wasm32")]
                         {
-                            log( &format!("Error parsing  robot pose: {}", err));
+                            log(&format!("Error parsing  robot pose: {}", err));
                         }
                     }
                 }
-            },
-            Err(err)=>{
+            }
+            Err(err) => {
                 #[cfg(target_arch = "wasm32")]
                 {
-                    log( &format!("Error parsing  robot list items JSON: {}", err));
+                    log(&format!("Error parsing  robot list items JSON: {}", err));
                 }
             }
         }
     }
 }
 
-
-
 fn update_robot_pose(mut cubes: Query<(&mut Transform, &mut Movable)>, timer: Res<Time>) {
-    
-    let mut index:u32 = 0;
+    let mut index: u32 = 0;
     for (mut transform, mut cube) in &mut cubes {
         if let Some(robot_id) = rcc::get_robot_id(index) {
-            
             if let Some(robot_pose) = rcc::get_robot_pose_by_id(&robot_id) {
-                
                 let target_position = Vec3::new(robot_pose.x, robot_pose.y, 0.0);
                 let direction = (target_position - transform.translation).normalize();
 
                 // Update the position only if the robot has not reached the position yet
-                if !(transform.translation.distance(target_position) <= cube.speed * timer.delta_seconds()) {
+                if !(transform.translation.distance(target_position)
+                    <= cube.speed * timer.delta_seconds())
+                {
                     transform.translation += direction * cube.speed * timer.delta_seconds();
                 }
-                
             } else {
                 log("unable to get robot pose");
             }
-           
         } else {
             log("unable to get robot id");
         }

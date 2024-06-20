@@ -184,7 +184,29 @@ impl Site {
         ron::de::from_bytes(s)
     }
 
-    pub fn get_anchor(&self, id: u32) -> Option<&Anchor> {     self.anchors     .get(&id)     .or_else(|| self.levels.values().find_map(|l| l.anchors.get(&id)))    }
+    pub fn get_anchor(&self, id: u32) -> Option<&Anchor> {
+        self.anchors
+            .get(&id)
+            .or_else(|| self.levels.values().find_map(|l| l.anchors.get(&id)))
+    }
+
+    #[allow(non_snake_case)]
+    pub fn blank_L1(name: String) -> Self {
+        let mut site = Site::default();
+        site.properties.name = NameOfSite(name);
+        site.levels.insert(
+            1,
+            Level::new(
+                LevelProperties {
+                    name: NameInSite("L1".to_owned()),
+                    elevation: LevelElevation(0.0),
+                    ..Default::default()
+                },
+                RankingsInLevel::default(),
+            ),
+        );
+        site
+    }
 }
 
 pub trait RefTrait: Ord + Eq + Copy + Send + Sync + Hash + 'static {}

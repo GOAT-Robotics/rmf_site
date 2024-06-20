@@ -2,8 +2,10 @@ use crate::{
     site::{AnchorBundle, DrawingBundle, LoadResult},
     site_mode, JsValue, WorkspaceMarker,
 };
-use bevy::prelude::{Commands, SpatialBundle};
-use bevy_utils::default;
+use bevy::{
+    prelude::{Commands, SpatialBundle},
+    utils::default,
+};
 use once_cell::sync::Lazy;
 use rmf_site_format::{
     Anchor, Category, DrawingProperties, Location, LocationTag, NameInSite, SiteID,

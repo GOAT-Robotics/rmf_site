@@ -48,20 +48,13 @@ impl<'a> InspectAssetSource<'a> {
         let mut new_source = self.source.clone();
         let mut new_map_index = unsafe { rcc::MAP_INDEX };
 
-        let osm_string = "OpenStreetMaps".to_string();
         // TODO(luca) implement recall plugin
         let assumed_source = match self.source {
             AssetSource::Local(filename) => filename,
             AssetSource::Remote(uri) => uri,
             AssetSource::RCC(uri) => uri,
             AssetSource::Search(name) => name,
-            AssetSource::Bundled(name) => name,
             AssetSource::Package(path) => path,
-            AssetSource::OSMTile {
-                zoom,
-                latitude,
-                longitude,
-            } => &osm_string,
         };
         ui.horizontal(|ui| {
             ui.label("Source");
@@ -73,7 +66,6 @@ impl<'a> InspectAssetSource<'a> {
                         AssetSource::Remote(assumed_source.clone()),
                         AssetSource::RCC(assumed_source.clone()),
                         AssetSource::Search(assumed_source.clone()),
-                        AssetSource::Bundled(assumed_source.clone()),
                         AssetSource::Package(assumed_source.clone()),
                     ] {
                         ui.selectable_value(&mut new_source, variant.clone(), variant.label());
@@ -146,23 +138,26 @@ impl<'a> InspectAssetSource<'a> {
                     let map_list = get_map_list().clone();
 
                     if *uri != "" {
-                        //load previously selected map by default 
+                        //load previously selected map by default
                         for i in 0..map_list.length() {
                             match rcc::parse_js_value(&map_list.get(i)) {
-                                Ok(obj)=>{
+                                Ok(obj) => {
                                     if obj.image_url == *uri {
                                         new_map_index = i;
                                         break;
                                     }
-                                },
-                                Err(err)=>{
+                                }
+                                Err(err) => {
                                     #[cfg(target_arch = "wasm32")]
                                     {
-                                        log( &format!("Error parsing  map list items JSON: {}", err));
+                                        log(&format!(
+                                            "Error parsing  map list items JSON: {}",
+                                            err
+                                        ));
                                     }
                                 }
                             }
-                        }   
+                        }
                     }
 
                     match rcc::parse_js_value(&map_list.get(new_map_index)) {
@@ -221,23 +216,8 @@ impl<'a> InspectAssetSource<'a> {
             AssetSource::Search(name) => {
                 ui.text_edit_singleline(name);
             }
-            AssetSource::Bundled(name) => {
-                ui.text_edit_singleline(name);
-            }
             AssetSource::Package(path) => {
                 ui.text_edit_singleline(path);
-            }
-            AssetSource::OSMTile {
-                zoom,
-                latitude,
-                longitude,
-            } => {
-                ui.horizontal(|ui| {
-                    ui.add(Label::new("Latitude"));
-                    ui.add(DragValue::new(latitude).speed(1e-8));
-                    ui.add(Label::new("Longitude"));
-                    ui.add(DragValue::new(longitude).speed(1e-8));
-                });
             }
         }
 
