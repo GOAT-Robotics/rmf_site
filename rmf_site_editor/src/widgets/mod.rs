@@ -23,17 +23,16 @@ use crate::{
     occupancy::CalculateGrid,
     recency::ChangeRank,
     site::{
-        AlignSiteDrawings, AssociatedGraphs, BeginEditDrawing, Change, CollisionMeshMarker,
-        ConsiderAssociatedGraph, ConsiderLocationTag, CurrentLevel, Delete, DrawingMarker,
-        ExportLights, FinishEditDrawing, GlobalDrawingVisibility, GlobalFloorVisibility,
-        JointProperties, LayerVisibility, MergeGroups, PhysicalLightToggle, SaveNavGraphs, Texture,
-        ToggleLiftDoorAvailability, VisualMeshMarker,
+        AlignSiteDrawings, AssociatedGraphs, BeginEditDrawing, Change, ConsiderAssociatedGraph,
+        ConsiderLocationTag, CurrentLevel, Delete, DrawingMarker, ExportLights, FinishEditDrawing,
+        GlobalDrawingVisibility, GlobalFloorVisibility, JointProperties, LayerVisibility,
+        MergeGroups, PhysicalLightToggle, SaveNavGraphs, Texture, ToggleLiftDoorAvailability,
     },
     workcell::CreateJoint,
     AppState, CreateNewWorkspace, CurrentWorkspace, LoadWorkspace, SaveWorkspace,
     ValidateWorkspace,
 };
-use bevy::{ecs::query::Has, ecs::system::SystemParam, prelude::*};
+use bevy::{asset::embedded_asset, ecs::query::Has, ecs::system::SystemParam, prelude::*};
 use bevy_egui::{
     egui::{self, Button, CollapsingHeader},
     EguiContexts,
@@ -99,8 +98,62 @@ pub struct PendingModel {
 #[derive(Default)]
 pub struct StandardUiLayout;
 
+fn add_widgets_icons(app: &mut App) {
+    // Taken from https://github.com/bevyengine/bevy/issues/10377#issuecomment-1858797002
+    // TODO(luca) remove once we migrate to Bevy 0.13 that includes the fix
+    #[cfg(any(not(target_family = "windows"), target_env = "gnu"))]
+    {
+        embedded_asset!(app, "src/", "icons/add.png");
+        embedded_asset!(app, "src/", "icons/alignment.png");
+        embedded_asset!(app, "src/", "icons/alpha.png");
+        embedded_asset!(app, "src/", "icons/confirm.png");
+        embedded_asset!(app, "src/", "icons/down.png");
+        embedded_asset!(app, "src/", "icons/edit.png");
+        embedded_asset!(app, "src/", "icons/empty.png");
+        embedded_asset!(app, "src/", "icons/exit.png");
+        embedded_asset!(app, "src/", "icons/global.png");
+        embedded_asset!(app, "src/", "icons/hidden.png");
+        embedded_asset!(app, "src/", "icons/hide.png");
+        embedded_asset!(app, "src/", "icons/merge.png");
+        embedded_asset!(app, "src/", "icons/opaque.png");
+        embedded_asset!(app, "src/", "icons/reject.png");
+        embedded_asset!(app, "src/", "icons/search.png");
+        embedded_asset!(app, "src/", "icons/select.png");
+        embedded_asset!(app, "src/", "icons/selected.png");
+        embedded_asset!(app, "src/", "icons/to_bottom.png");
+        embedded_asset!(app, "src/", "icons/to_top.png");
+        embedded_asset!(app, "src/", "icons/trash.png");
+        embedded_asset!(app, "src/", "icons/up.png");
+    }
+    #[cfg(all(target_family = "windows", not(target_env = "gnu")))]
+    {
+        embedded_asset!(app, "src\\", "icons\\add.png");
+        embedded_asset!(app, "src\\", "icons\\alignment.png");
+        embedded_asset!(app, "src\\", "icons\\alpha.png");
+        embedded_asset!(app, "src\\", "icons\\confirm.png");
+        embedded_asset!(app, "src\\", "icons\\down.png");
+        embedded_asset!(app, "src\\", "icons\\edit.png");
+        embedded_asset!(app, "src\\", "icons\\empty.png");
+        embedded_asset!(app, "src\\", "icons\\exit.png");
+        embedded_asset!(app, "src\\", "icons\\global.png");
+        embedded_asset!(app, "src\\", "icons\\hidden.png");
+        embedded_asset!(app, "src\\", "icons\\hide.png");
+        embedded_asset!(app, "src\\", "icons\\merge.png");
+        embedded_asset!(app, "src\\", "icons\\opaque.png");
+        embedded_asset!(app, "src\\", "icons\\reject.png");
+        embedded_asset!(app, "src\\", "icons\\search.png");
+        embedded_asset!(app, "src\\", "icons\\select.png");
+        embedded_asset!(app, "src\\", "icons\\selected.png");
+        embedded_asset!(app, "src\\", "icons\\to_bottom.png");
+        embedded_asset!(app, "src\\", "icons\\to_top.png");
+        embedded_asset!(app, "src\\", "icons\\trash.png");
+        embedded_asset!(app, "src\\", "icons\\up.png");
+    }
+}
+
 impl Plugin for StandardUiLayout {
     fn build(&self, app: &mut App) {
+        add_widgets_icons(app);
         app.init_resource::<Icons>()
             .init_resource::<LevelDisplay>()
             .init_resource::<NavGraphDisplay>()
@@ -435,7 +488,6 @@ fn site_drawing_ui_layout(
                         if ui
                             .add(Button::image_and_text(
                                 events.layers.icons.exit.egui(),
-                                [18., 18.],
                                 "Return to site editor",
                             ))
                             .clicked()
@@ -514,7 +566,6 @@ fn site_visualizer_ui_layout(
                         ui.separator();
                         if ui.add(Button::image_and_text(
                             events.layers.icons.alignment.egui(),
-                            [18., 18.],
                             "Align Drawings",
                         ))
                             .on_hover_text("Align all drawings in the site based on their fiducials and measurements")
@@ -526,7 +577,6 @@ fn site_visualizer_ui_layout(
                         }
                         if ui.add(Button::image_and_text(
                             events.layers.icons.exit.egui(),
-                            [18., 18.],
                             "Return to site editor"
                         )).clicked() {
                             events.next_app_state.set(AppState::SiteEditor);

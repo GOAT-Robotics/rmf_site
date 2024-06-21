@@ -28,10 +28,23 @@ pub fn fetch_image_for_texture(
     asset_server: Res<AssetServer>,
 ) {
     for (e, image, texture) in &mut changed_textures {
+        let asset_path = match String::try_from(&texture.source) {
+            Ok(asset_path) => asset_path,
+            Err(err) => {
+                error!(
+                    "Invalid syntax while creating asset path: {err}. \
+                    Check that your asset information was input correctly. \
+                    Current value:\n{:?}",
+                    texture.source,
+                );
+                continue;
+            }
+        };
+
         if let Some(mut image) = image {
-            *image = asset_server.load(String::from(&texture.source));
+            *image = asset_server.load(asset_path);
         } else {
-            let image: Handle<Image> = asset_server.load(String::from(&texture.source));
+            let image: Handle<Image> = asset_server.load(asset_path);
             commands.entity(e).insert(image);
         }
     }
@@ -62,7 +75,7 @@ pub fn detect_last_selected_texture<T: Component>(
         }
     }
 
-    for group in removed_groups.iter() {
+    for group in removed_groups.read() {
         for mut last in &mut last_selected {
             if last.selection.is_some_and(|l| l == group) {
                 last.selection = None;

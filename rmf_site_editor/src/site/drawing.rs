@@ -17,6 +17,7 @@
 
 use crate::{
     interaction::Selectable,
+    log,
     shapes::make_flat_rect_mesh,
     site::{
         get_current_workspace_path, Anchor, DefaultFile, FiducialMarker, GlobalDrawingVisibility,
@@ -25,9 +26,10 @@ use crate::{
     },
     CurrentWorkspace,
 };
-use bevy::{asset::LoadState, math::Affine3A, prelude::*};
-use rmf_site_format::{AssetSource, Category, DrawingProperties, NameInSite, PixelsPerMeter, Pose};
-use std::path::PathBuf;
+use bevy::{asset::LoadState, math::Affine3A, prelude::*, utils::Uuid};
+use rand::Rng;
+use rmf_site_format::{AssetSource, Category, DrawingProperties, PixelsPerMeter, Pose};
+use std::{fmt::format, path::PathBuf, time::Duration};
 
 #[derive(Bundle, Debug, Clone)]
 pub struct DrawingBundle {
@@ -36,7 +38,8 @@ pub struct DrawingBundle {
     pub transform: Transform,
     pub global_transform: GlobalTransform,
     pub visibility: Visibility,
-    pub computed: ComputedVisibility,
+    pub inherited: InheritedVisibility,
+    pub view: ViewVisibility,
     pub marker: DrawingMarker,
 }
 
@@ -48,7 +51,8 @@ impl DrawingBundle {
             transform: default(),
             global_transform: default(),
             visibility: default(),
-            computed: default(),
+            inherited: default(),
+            view: default(),
             marker: default(),
         }
     }
@@ -64,10 +68,13 @@ pub struct DrawingSegments {
     leaf: Entity,
 }
 
+#[derive(Component)]
+pub struct LoadingDelay(Timer);
+
 // We need to keep track of the drawing data until the image is loaded
 // since we will need to scale the mesh according to the size of the image
-#[derive(Component)]
-pub struct LoadingDrawing(Handle<Image>);
+#[derive(Component, Deref, DerefMut)]
+pub struct LoadingDrawing(String, #[deref] Handle<Image>);
 
 fn drawing_layer_height(rank: Option<&RecencyRank<DrawingMarker>>) -> f32 {
     rank.map(|r| r.proportion() * (FLOOR_LAYER_START - DRAWING_LAYER_START) + DRAWING_LAYER_START)
@@ -80,7 +87,6 @@ pub fn add_drawing_visuals(
     asset_server: Res<AssetServer>,
     current_workspace: Res<CurrentWorkspace>,
     site_files: Query<&DefaultFile>,
-    default_drawing_vis: Query<&GlobalDrawingVisibility>,
 ) {
     if changed_drawings.is_empty() {
         return;
@@ -102,12 +108,31 @@ pub fn add_drawing_visuals(
             )),
             _ => source.clone(),
         };
-        let texture_handle: Handle<Image> = asset_server.load(&String::from(&asset_source));
-        commands.entity(e).insert(LoadingDrawing(texture_handle));
+        let asset_path = match String::try_from(&asset_source) {
+            Ok(asset_path) => asset_path,
+            Err(err) => {
+                error!(
+                    "Invalid syntax while creating asset path for a drawing: {err}. \
+                    Check that your asset information was input correctly. \
+                    Current value:\n{:?}",
+                    asset_source,
+                );
+                continue;
+            }
+        };
+        let log_id: String = rand::thread_rng().gen_range(100..999).to_string();
+
+        info!("{} :asset path is {}", log_id, asset_path);
+        let texture_handle: Handle<Image> = asset_server
+            .load("https://cdn.goat-robotics.xyz/goatrobotics/map/qQQLaTy0Bn/first_floor.png");
+        info!("{} :loaded asset handle", log_id);
+
+        commands
+            .entity(e)
+            .insert(LoadingDrawing(log_id, texture_handle));
     }
 }
 
-// Asset event handler for loaded drawings
 pub fn handle_loaded_drawing(
     mut commands: Commands,
     assets: Res<Assets<Image>>,
@@ -130,9 +155,28 @@ pub fn handle_loaded_drawing(
     for (entity, source, pose, pixels_per_meter, handle, vis, parent, rank) in
         loading_drawings.iter()
     {
-        match asset_server.get_load_state(&handle.0) {
+        let log_id = &handle.0;
+
+        let handle_id = handle.id();
+        let Some(load_state) = asset_server.get_load_state(handle.id()) else {
+            info!(
+                "{}: Handle for drawing with source {:?} not found",
+                log_id, source,
+            );
+            continue;
+        };
+        info!(
+            "{}: Checking if drawing with handle ID {:?} is added...",
+            log_id, handle_id
+        );
+
+        match load_state {
+            LoadState::Loading => {
+                warn!("{}: Loading drawing...", log_id);
+            }
             LoadState::Loaded => {
-                let img = assets.get(&handle.0).unwrap();
+                info!("{}: Drawing loaded", log_id);
+                let img = assets.get(&handle.1).unwrap();
                 let width = img.texture_descriptor.size.width as f32;
                 let height = img.texture_descriptor.size.height as f32;
 
@@ -146,7 +190,7 @@ pub fn handle_loaded_drawing(
                     .flatten();
                 let (alpha, alpha_mode) = drawing_alpha(vis, rank, default);
                 let material = materials.add(StandardMaterial {
-                    base_color_texture: Some(handle.0.clone()),
+                    base_color_texture: Some(handle.1.clone()),
                     base_color: *Color::default().set_a(alpha),
                     alpha_mode,
                     perceptual_roughness: 0.089,
@@ -189,7 +233,7 @@ pub fn handle_loaded_drawing(
                     .remove::<LoadingDrawing>();
             }
             LoadState::Failed => {
-                error!("Failed loading drawing {:?}", String::from(source));
+                error!("{}: Failed loading drawing {:?}", log_id, source);
                 commands.entity(entity).remove::<LoadingDrawing>();
             }
             _ => {}
@@ -353,7 +397,7 @@ pub fn update_drawing_visibility(
     );
 
     iter_update_drawing_visibility(
-        removed_vis.iter().filter_map(|e| all_drawings.get(e).ok()),
+        removed_vis.read().filter_map(|e| all_drawings.get(e).ok()),
         &material_handles,
         &mut material_assets,
         &default_drawing_vis,

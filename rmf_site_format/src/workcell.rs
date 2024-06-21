@@ -23,7 +23,9 @@ use crate::*;
 #[cfg(feature = "bevy")]
 use bevy::ecs::system::EntityCommands;
 #[cfg(feature = "bevy")]
-use bevy::prelude::{Bundle, Component, Deref, DerefMut, Entity, SpatialBundle};
+use bevy::prelude::{
+    Bundle, Component, Deref, DerefMut, Entity, Reflect, ReflectComponent, SpatialBundle,
+};
 #[cfg(feature = "bevy")]
 use bevy::reflect::{TypePath, TypeUuid};
 use glam::{EulerRot, Vec3};
@@ -284,12 +286,21 @@ pub enum Geometry {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
-#[cfg_attr(feature = "bevy", derive(Component))]
+#[cfg_attr(feature = "bevy", derive(Component, Reflect))]
+#[cfg_attr(feature = "bevy", reflect(Component))]
 pub enum PrimitiveShape {
     Box { size: [f32; 3] },
     Cylinder { radius: f32, length: f32 },
     Capsule { radius: f32, length: f32 },
     Sphere { radius: f32 },
+}
+
+impl Default for PrimitiveShape {
+    fn default() -> Self {
+        Self::Box {
+            size: [1.0, 1.0, 1.0],
+        }
+    }
 }
 
 impl PrimitiveShape {
@@ -483,7 +494,10 @@ impl From<Geometry> for urdf_rs::Geometry {
     fn from(geometry: Geometry) -> Self {
         match geometry {
             Geometry::Mesh { source, scale } => urdf_rs::Geometry::Mesh {
-                filename: (&source).into(),
+                // SAFETY: We don't need to validate the syntax of the asset
+                // path because that will be done later when we attempt to load
+                // this as an asset.
+                filename: unsafe { (&source).as_unvalidated_asset_path() },
                 scale: scale.map(|v| urdf_rs::Vec3([v.x as f64, v.y as f64, v.z as f64])),
             },
             Geometry::Primitive(PrimitiveShape::Box { size: [x, y, z] }) => {
@@ -696,7 +710,11 @@ impl Workcell {
                     rot: Rotation::Quat([0.0, 0.0, 0.0, 0.0]),
                     trans: [0.0, 0.0, 0.0],
                 }),
-                name: Some(NameInWorkcell(String::from("world"))),
+                // As per Industrial Workcell Coordinate Conventions, the name of the workcell
+                // datum link shall be "<workcell_name>_workcell_link".
+                name: Some(NameInWorkcell(String::from(
+                    self.properties.name.0.clone() + "_workcell_link",
+                ))),
                 mesh_constraint: None,
                 marker: FrameMarker,
             };
@@ -879,10 +897,14 @@ impl From<&urdf_rs::Geometry> for Geometry {
                 let scale = scale
                     .clone()
                     .and_then(|s| Some(Vec3::from_array(s.map(|v| v as f32))));
-                Geometry::Mesh {
-                    source: (&**filename).into(),
-                    scale,
-                }
+                // Most (all?) Urdf files use package references, we fallback to local if that is
+                // not the case
+                let source = if let Some(path) = filename.strip_prefix("package://") {
+                    AssetSource::Package(path.to_owned())
+                } else {
+                    AssetSource::Local(filename.clone())
+                };
+                Geometry::Mesh { source, scale }
             }
         }
     }

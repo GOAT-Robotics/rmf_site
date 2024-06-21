@@ -142,27 +142,21 @@ impl<'a, 'w1, 'w2, 's1, 's2> InspectFiducialWidget<'a, 'w1, 'w2, 's1, 's2> {
 
             if any_partial_matches {
                 if ui
-                    .add(ImageButton::new(
-                        self.params.icons.search.egui(),
-                        [18., 18.],
-                    ))
+                    .add(ImageButton::new(self.params.icons.search.egui()))
                     .on_hover_text("Search results for this text can be found below")
                     .clicked()
                 {
                     info!("Use the drop-down box to choose a group for this fiducial");
                 }
             } else {
-                ui.add(ImageButton::new(self.params.icons.empty.egui(), [18., 18.]))
+                ui.add(ImageButton::new(self.params.icons.empty.egui()))
                     .on_hover_text("No search results can be found for this text");
             }
 
             match result {
                 SearchResult::Empty => {
                     if ui
-                        .add(ImageButton::new(
-                            self.params.icons.hidden.egui(),
-                            [18., 18.],
-                        ))
+                        .add(ImageButton::new(self.params.icons.hidden.egui()))
                         .on_hover_text("An empty string is not a good fiducial group name")
                         .clicked()
                     {
@@ -171,10 +165,7 @@ impl<'a, 'w1, 'w2, 's1, 's2> InspectFiducialWidget<'a, 'w1, 'w2, 's1, 's2> {
                 }
                 SearchResult::Current => {
                     if ui
-                        .add(ImageButton::new(
-                            self.params.icons.selected.egui(),
-                            [18., 18.],
-                        ))
+                        .add(ImageButton::new(self.params.icons.selected.egui()))
                         .on_hover_text("This is the name of the fiducial's current group")
                         .clicked()
                     {
@@ -183,7 +174,7 @@ impl<'a, 'w1, 'w2, 's1, 's2> InspectFiducialWidget<'a, 'w1, 'w2, 's1, 's2> {
                 }
                 SearchResult::NoMatch => {
                     if ui
-                        .add(ImageButton::new(self.params.icons.add.egui(), [18., 18.]))
+                        .add(ImageButton::new(self.params.icons.add.egui()))
                         .on_hover_text("Create a new group for this fiducial")
                         .clicked()
                     {
@@ -201,10 +192,7 @@ impl<'a, 'w1, 'w2, 's1, 's2> InspectFiducialWidget<'a, 'w1, 'w2, 's1, 's2> {
                 }
                 SearchResult::Match(group) => {
                     if ui
-                        .add(ImageButton::new(
-                            self.params.icons.confirm.egui(),
-                            [18., 18.],
-                        ))
+                        .add(ImageButton::new(self.params.icons.confirm.egui()))
                         .on_hover_text("Select this group")
                         .clicked()
                     {
@@ -216,10 +204,7 @@ impl<'a, 'w1, 'w2, 's1, 's2> InspectFiducialWidget<'a, 'w1, 'w2, 's1, 's2> {
                 }
                 SearchResult::Conflict(text) => {
                     if ui
-                        .add(ImageButton::new(
-                            self.params.icons.reject.egui(),
-                            [18., 18.],
-                        ))
+                        .add(ImageButton::new(self.params.icons.reject.egui()))
                         .on_hover_text(text)
                         .clicked()
                     {
@@ -235,12 +220,14 @@ impl<'a, 'w1, 'w2, 's1, 's2> InspectFiducialWidget<'a, 'w1, 'w2, 's1, 's2> {
         let mut new_affiliation = affiliation.clone();
         ui.horizontal(|ui| {
             if ui
-                .add(ImageButton::new(self.params.icons.exit.egui(), [18., 18.]))
+                .add(ImageButton::new(self.params.icons.exit.egui()))
                 .on_hover_text("Remove this fiducial from its current group")
                 .clicked()
             {
                 new_affiliation = Affiliation(None);
             }
+
+            let mut clear_filter = false;
             ComboBox::from_id_source("fiducial_affiliation")
                 .selected_text(selected_text)
                 .show_ui(ui, |ui| {
@@ -254,7 +241,15 @@ impl<'a, 'w1, 'w2, 's1, 's2> InspectFiducialWidget<'a, 'w1, 'w2, 's1, 's2> {
                             ui.selectable_value(&mut new_affiliation, select_affiliation, name);
                         }
                     }
+
+                    if !self.events.change.search_for_fiducial.0.is_empty() {
+                        ui.selectable_value(&mut clear_filter, true, "more...");
+                    }
                 });
+
+            if clear_filter {
+                self.events.change.search_for_fiducial.0.clear();
+            }
         });
 
         if new_affiliation != *affiliation {

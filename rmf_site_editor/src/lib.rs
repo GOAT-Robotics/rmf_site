@@ -3,6 +3,7 @@ extern crate console_error_panic_hook;
 use bevy::{
     log::LogPlugin, pbr::DirectionalLightShadowMap, prelude::*, render::{mesh::shape::Cube, renderer::RenderAdapterInfo},
 };
+
 use bevy_egui::EguiPlugin;
 
 use main_menu::MainMenuPlugin;
@@ -19,11 +20,14 @@ use wasm_bindgen::JsValue;
 pub mod aabb;
 pub mod animate;
 
+pub mod asset_loaders;
+use asset_loaders::*;
+
 pub mod keyboard;
 use keyboard::*;
 
 pub mod widgets;
-use widgets::{menu_bar::MenuPluginManager, *};
+use widgets::*;
 pub mod occupancy;
 use occupancy::OccupancyPlugin;
 pub mod issue;
@@ -50,7 +54,7 @@ use workspace::*;
 pub mod sdf_loader;
 
 pub mod site_asset_io;
-pub mod urdf_loader;
+//pub mod urdf_loader;
 use sdf_loader::*;
 
 pub mod view_menu;
@@ -270,74 +274,53 @@ pub struct SiteEditor;
 
 impl Plugin for SiteEditor {
     fn build(&self, app: &mut App) {
-        #[cfg(target_arch = "wasm32")]
-        {
-            app.add_plugins(
-                DefaultPlugins
-                    .build()
-                    .disable::<LogPlugin>()
-                    .set(WindowPlugin {
-                        primary_window: Some(Window {
-                            title: "RCC RMF Site Editor".to_owned(),
-                            canvas: Some(String::from("#rmf_site_editor_canvas")),
-                            fit_canvas_to_parent: true,
-                            ..default()
-                        }),
-                        ..default()
-                    })
-                    .set(ImagePlugin {
-                        default_sampler: SamplerDescriptor {
-                            address_mode_u: AddressMode::Repeat,
-                            address_mode_v: AddressMode::Repeat,
-                            address_mode_w: AddressMode::Repeat,
-                            ..Default::default()
-                        },
-                    })
-                    .add_after::<bevy::asset::AssetPlugin, _>(SiteAssetIoPlugin),
-            );
-        }
 
-        #[cfg(not(target_arch = "wasm32"))]
-        {
-            app.add_plugins(
-                DefaultPlugins
-                    .build()
-                    .disable::<LogPlugin>()
-                    .set(WindowPlugin {
-                        primary_window: Some(Window {
-                            title: "RMF Site Editor".to_owned(),
-                            resolution: (1600., 900.).into(),
-                            ..default()
-                        }),
+      app.add_plugins((
+            SiteAssetIoPlugin,
+            DefaultPlugins
+                .build()
+                .disable::<LogPlugin>()
+                .set(WindowPlugin {
+                    primary_window: Some(Window {
+                        title: "RMF Site Editor".to_owned(),
+                        #[cfg(not(target_arch = "wasm32"))]
+                        resolution: (1600., 900.).into(),
+                        #[cfg(target_arch = "wasm32")]
+                        canvas: Some(String::from("#rmf_site_editor_canvas")),
+                        #[cfg(target_arch = "wasm32")]
+                        fit_canvas_to_parent: true,
                         ..default()
-                    })
-                    .set(ImagePlugin {
-                        default_sampler: SamplerDescriptor {
-                            address_mode_u: AddressMode::Repeat,
-                            address_mode_v: AddressMode::Repeat,
-                            address_mode_w: AddressMode::Repeat,
-                            ..Default::default()
-                        },
-                    })
-                    .set(RenderPlugin {
-                        wgpu_settings: WgpuSettings {
-                            features: WgpuFeatures::POLYGON_MODE_LINE,
-                            ..default()
-                        },
+                    }),
+                    ..default()
+                })
+                .set(ImagePlugin {
+                    default_sampler: SamplerDescriptor {
+                        address_mode_u: AddressMode::Repeat,
+                        address_mode_v: AddressMode::Repeat,
+                        address_mode_w: AddressMode::Repeat,
+                        ..Default::default()
+                    }
+                    .into(),
+                })
+                .set(RenderPlugin {
+                    render_creation: WgpuSettings {
+                        #[cfg(not(target_arch = "wasm32"))]
+                        features: WgpuFeatures::POLYGON_MODE_LINE,
                         ..default()
-                    })
-                    .add_after::<bevy::asset::AssetPlugin, _>(SiteAssetIoPlugin),
-            );
-        }
-
+                    }
+                    .into(),
+                    ..default()
+                }),
+        ));
+      
         app.insert_resource(DirectionalLightShadowMap { size: 2048 })
             .add_state::<AppState>()
             .add_plugins((
+                AssetLoadersPlugin,
                 LogHistoryPlugin,
                 AabbUpdatePlugin,
                 EguiPlugin,
                 KeyboardInputPlugin,
-                SdfPlugin,
                 MainMenuPlugin,
                 WorkcellEditorPlugin,
                 SitePlugin,
@@ -354,6 +337,10 @@ impl Plugin for SiteEditor {
                 OSMViewPlugin,
                 SiteWireframePlugin,
             ));
+        // Ref https://github.com/bevyengine/bevy/issues/10877. The default behavior causes issues
+        // with events being accumulated when not read (i.e. scrolling mouse wheel on a UI widget).
+        app.world
+            .remove_resource::<bevy::ecs::event::EventUpdateSignal>();
     }
 }
 

@@ -1,4 +1,5 @@
 use crate::*;
+use glam::Affine2;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 
@@ -10,9 +11,9 @@ pub struct NavGraph {
     pub lifts: HashMap<String, NavLift>,
 }
 
-// Readapted from legacy traffic editor implementation
+// Reference: https://en.wikipedia.org/wiki/Line%E2%80%93line_intersection#Given_two_points_on_each_line_segment
 fn segments_intersect(p1: [f32; 2], p2: [f32; 2], p3: [f32; 2], p4: [f32; 2]) -> bool {
-    // line segments are (x1,y1),(x2,y2) and (x3,y3),(x4,y4)
+    // line segments are [p1-p2] and [p3-p4]
     let [x1, y1] = p1;
     let [x2, y2] = p2;
     let [x3, y3] = p3;
@@ -46,46 +47,91 @@ impl NavGraph {
             };
 
             let lanes_with_anchor = {
-                // let mut lanes_with_anchor = HashMap::new();
-                let mut lanes_with_anchor: HashMap<u32, Vec<(u32, &Lane<u32>)>> = HashMap::new();
+                let mut lanes_with_anchor: HashMap<u32, Vec<u32>> = HashMap::new();
                 for (lane_id, lane) in &site.navigation.guided.lanes {
                     if !lane.graphs.includes(graph_id) {
                         continue;
                     }
                     for a in lane.anchors.array() {
-                        // lanes_with_anchor.insert(a, (*lane_id, lane));
-                        lanes_with_anchor.entry(a).or_default().push((*lane_id, lane));
+                        let entry = lanes_with_anchor.entry(a).or_default();
+                        entry.push(*lane_id);
                     }
                 }
                 lanes_with_anchor
             };
 
-            // TODO(MXG): Make this work for lifts
-
             let mut doors = HashMap::new();
             let mut levels = HashMap::new();
+            let mut lifts = HashMap::new();
             for (_, level) in &site.levels {
                 let mut anchor_to_vertex = HashMap::new();
                 let mut vertices = Vec::new();
                 let mut lanes_to_include = HashSet::new();
-                for (id, anchor) in &level.anchors {
-                    let lanes = match lanes_with_anchor.get(id) {
-                        Some(v) => v,
-                        None => {
-                            if let Some(location) = location_at_anchor.get(id) {
-                                // Even if the location is not connected by any
-                                // lane, include it in the nav graph.
-                                anchor_to_vertex.insert(*id, vertices.len());
-                                vertices.push(NavVertex::from_anchor(anchor, Some(location)));
-                            }
+                // Add vertices for anchors that are in lifts
+                for lift in site.lifts.values() {
+                    let lift_name = &lift.properties.name.0;
+                    let Some(center) = lift.properties.center(site) else {
+                        eprintln!(
+                            "ERROR: Skipping lift {lift_name} due to broken anchor reference"
+                        );
+                        continue;
+                    };
+                    let Rotation::Yaw(yaw) = center.rot else {
+                        eprintln!(
+                            "ERROR: Skipping lift {lift_name} due to rotation not being pure yaw"
+                        );
+                        continue;
+                    };
+                    let yaw = yaw.radians();
+                    // Note this will overwrite the entry in the map but that is OK
+                    // TODO(luca) check that the lift position is correct when doing end to end testing
+                    match &lift.properties.cabin {
+                        LiftCabin::Rect(params) => {
+                            lifts.insert(
+                                lift_name.clone(),
+                                NavLift {
+                                    position: [center.trans[0], center.trans[1], yaw],
+                                    // Note depth and width are inverted between legacy and site editor
+                                    dims: [params.depth, params.width],
+                                },
+                            );
+                        }
+                    }
+                    for (id, anchor) in &lift.cabin_anchors {
+                        let Some(lanes) = lanes_with_anchor.get(id) else {
                             continue;
-                        },
+                        };
+
+                        for lane in lanes.iter() {
+                            lanes_to_include.insert(*lane);
+                        }
+
+                        // The anchor is in lift coordinates, make it in global coordinates
+                        let trans = anchor.translation_for_category(Category::General);
+                        let lift_tf = Affine2::from_angle_translation(
+                            yaw,
+                            [center.trans[0], center.trans[1]].into(),
+                        );
+                        let trans = lift_tf.transform_point2((*trans).into());
+                        let anchor = Anchor::Translate2D([trans[0], trans[1]]);
+
+                        anchor_to_vertex.insert(*id, vertices.len());
+                        let mut vertex =
+                            NavVertex::from_anchor(&anchor, location_at_anchor.get(id));
+                        vertex.2.lift = Some(lift_name.clone());
+                        vertices.push(vertex);
+                    }
+                }
+                // Add site and level anchors
+                for (id, anchor) in level.anchors.iter() {
+                    let Some(lanes) = lanes_with_anchor.get(id) else {
+                        continue;
                     };
 
-                    // lanes_to_include.insert(*lane);
-                    for (lane_id, _) in lanes {
-                        lanes_to_include.insert(*lane_id);
+                    for lane in lanes.iter() {
+                        lanes_to_include.insert(*lane);
                     }
+
                     anchor_to_vertex.insert(*id, vertices.len());
                     vertices.push(NavVertex::from_anchor(anchor, location_at_anchor.get(id)));
                 }
@@ -94,15 +140,15 @@ impl NavGraph {
                 for (_, door) in &level.doors {
                     let door_name = &door.name.0;
                     let (v0, v1) = match (
-                        level.anchors.get(&door.anchors.start()),
-                        level.anchors.get(&door.anchors.end()),
+                        site.get_anchor(door.anchors.start()),
+                        site.get_anchor(door.anchors.end()),
                     ) {
                         (Some(v0), Some(v1)) => (
-                            v0.translation_for_category(Category::Level),
-                            v1.translation_for_category(Category::Level),
+                            v0.translation_for_category(Category::Door),
+                            v1.translation_for_category(Category::Door),
                         ),
                         _ => {
-                            println!(
+                            eprintln!(
                                 "ERROR: Skipping door {door_name} due to broken anchor reference"
                             );
                             continue;
@@ -126,7 +172,7 @@ impl NavGraph {
                     ) {
                         (Some(v0), Some(v1)) => (*v0, *v1),
                         _ => {
-                            println!("ERROR: Skipping lane {lane_id} due to incompatibility");
+                            eprintln!("ERROR: Lane {lane_id} is using a site anchor. This is not supported, the lane will be skipped.");
                             continue;
                         }
                     };
@@ -166,32 +212,6 @@ impl NavGraph {
                 );
             }
 
-            let mut lifts = HashMap::new();
-            for (_, lift) in &site.lifts {
-                let lift_name = &lift.properties.name.0;
-                let Some(pose) = lift.properties.center(site) else {
-                    println!("ERROR: Skipping lift {lift_name} due to broken anchor reference");
-                    continue;
-                };
-                let Rotation::Yaw(yaw) = pose.rot else {
-                    println!("ERROR: Skipping lift {lift_name} due to rotation not being pure yaw");
-                    continue;
-                };
-                match &lift.properties.cabin {
-                    LiftCabin::Rect(params) => {
-                        lifts.insert(
-                            lift_name.clone(),
-                            NavLift {
-                                position: [pose.trans[0], pose.trans[1], yaw.radians()],
-                                // Note depth and width are inverted between legacy and site editor
-                                dims: [params.depth, params.width],
-                            },
-                        );
-                    }
-                }
-                // TODO(luca) lift property for vertices
-            }
-
             graphs.push((
                 graph.name.0.clone(),
                 Self {
@@ -219,13 +239,15 @@ pub struct NavLane(pub usize, pub usize, pub NavLaneProperties);
 #[derive(Serialize, Deserialize, Clone)]
 pub struct NavLaneProperties {
     pub speed_limit: f32,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub dock_name: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub door_name: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub orientation_constraint: Option<String>, // TODO(MXG): Add other lane properties
-                                                // demo_mock_floor_name
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub orientation_constraint: Option<String>,
+    // TODO(luca): Add other lane properties
+    // demo_mock_floor_name
+    // mutex
 }
 
 impl NavLaneProperties {
@@ -235,7 +257,7 @@ impl NavLaneProperties {
             OrientationConstraint::Forwards => Some("forward".to_owned()),
             OrientationConstraint::Backwards => Some("backward".to_owned()),
             OrientationConstraint::RelativeYaw(_) | OrientationConstraint::AbsoluteYaw(_) => {
-                println!(
+                eprintln!(
                     "Skipping orientation constraint [{:?}] because of incompatibility",
                     motion.orientation_constraint
                 );
@@ -263,15 +285,16 @@ impl NavVertex {
 
 #[derive(Serialize, Deserialize, Clone, Default)]
 pub struct NavVertexProperties {
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    // TODO(luca) serialize lift and merge_radius, they are currently skipped
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub lift: Option<String>,
-    #[serde(default = "is_bool_false", skip_serializing_if = "is_false")]
+    #[serde(skip_serializing_if = "is_false")]
     pub is_charger: bool,
-    #[serde(default = "is_bool_false", skip_serializing_if = "is_false")]
+    #[serde(skip_serializing_if = "is_false")]
     pub is_holding_point: bool,
-    #[serde(default = "is_bool_false", skip_serializing_if = "is_false")]
+    #[serde(skip_serializing_if = "is_false")]
     pub is_parking_spot: bool,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub merge_radius: Option<f32>,
     pub name: String,
 }
@@ -304,10 +327,6 @@ impl NavVertexProperties {
 
 fn is_false(b: &bool) -> bool {
     !b
-}
-
-fn is_bool_false() -> bool {
-    false
 }
 
 #[derive(Serialize, Deserialize, Clone)]

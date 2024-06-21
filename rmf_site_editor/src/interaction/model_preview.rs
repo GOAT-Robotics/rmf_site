@@ -23,7 +23,7 @@ use bevy::{
     core_pipeline::tonemapping::Tonemapping,
     ecs::system::SystemState,
     prelude::*,
-    render::{camera::RenderTarget, primitives::Aabb, view::RenderLayers},
+    render::{camera::RenderTarget, view::RenderLayers},
 };
 use bevy_egui::{egui::TextureId, EguiContexts};
 
