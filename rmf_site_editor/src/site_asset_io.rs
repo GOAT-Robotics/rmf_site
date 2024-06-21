@@ -13,7 +13,7 @@ use std::marker::Sync;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
-use crate::OSMTile;
+use crate::{log, OSMTile};
 use urdf_rs::utils::expand_package_path;
 
 pub fn cache_path() -> PathBuf {
@@ -170,6 +170,7 @@ where
     F: Fn(&Path) -> BoxedFuture<'_, Result<Box<Reader<'_>>, AssetReaderError>> + Sync + 'static,
 {
     pub fn new(reader: F) -> Self {
+        warn!("Called new site asset reader");
         Self {
             default_reader: (AssetSourceBuilder::platform_default("assets", None)
                 .reader
@@ -220,6 +221,7 @@ pub struct SiteAssetIoPlugin;
 
 impl Plugin for SiteAssetIoPlugin {
     fn build(&self, app: &mut App) {
+        log("Registering site asset plugin");
         // the asset server is constructed and added the resource manager
         app.register_asset_source(
             "search",
@@ -230,8 +232,8 @@ impl Plugin for SiteAssetIoPlugin {
                     // Relative to the MODEL_ENVIRONMENT_VARIABLE path
                     // Relative to a cache directory
                     // Attempt to fetch from the server and save it to the cache directory
-
                     let asset_name = path.to_str().unwrap().to_owned();
+
                     if let Ok(mut path) = get_path_from_env() {
                         // Check if file exists
                         path.push(&asset_name);
@@ -255,6 +257,25 @@ impl Plugin for SiteAssetIoPlugin {
                         Err(e) => return Box::pin(async move { Err(e) }),
                     };
 
+                    // It cannot be found locally, so let's try to fetch it from the
+                    // remote server
+                    Box::pin(async move { fetch_asset(remote_url, asset_name).await })
+                }))
+            }),
+        )
+        .register_asset_source(
+            "https",
+            BevyAssetSource::build().with_reader(|| {
+                Box::new(SiteAssetReader::new(|path: &Path| {
+                    // Order should be:
+                    // Relative to the building.yaml location
+                    // Relative to the MODEL_ENVIRONMENT_VARIABLE path
+                    // Relative to a cache directory
+                    // Attempt to fetch from the server and save it to the cache directory
+                    warn!("so when does it gets called 6666");
+                    log("called register asset source");
+                    let remote_url = format!("https://{}", path.to_str().unwrap());
+                    let asset_name = String::from("Map File");
                     // It cannot be found locally, so let's try to fetch it from the
                     // remote server
                     Box::pin(async move { fetch_asset(remote_url, asset_name).await })
@@ -310,19 +331,6 @@ impl Plugin for SiteAssetIoPlugin {
                             OSMTile::try_from(path.to_path_buf()).map_err(std::io::Error::other)?;
                         tile.get_map_image().await
                     })
-                }))
-            }),
-        )
-        .register_asset_source(
-            "rcc",
-            BevyAssetSource::build().with_reader(|| {
-                Box::new(SiteAssetReader::new(|path: &Path| {
-                    let asset_name = path.to_str().unwrap().to_owned();
-                    let s3_url = asset_name.clone();
-
-                    println!("Fetching RCC asset: {}", s3_url);
-
-                    Box::pin(async move { fetch_asset(s3_url, asset_name).await })
                 }))
             }),
         );

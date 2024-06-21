@@ -16,6 +16,7 @@
 */
 
 use crate::*;
+use bevy::log::info;
 #[cfg(feature = "bevy")]
 use bevy::{
     asset::{AssetPath, ParseAssetPathError},
@@ -86,7 +87,7 @@ impl AssetSource {
     pub unsafe fn as_unvalidated_asset_path(&self) -> String {
         match self {
             AssetSource::Remote(uri) => String::from("rmf-server://") + uri,
-            AssetSource::RCC(uri) => String::from("rcc://") + uri,
+            AssetSource::RCC(name) => String::from("https://") + name,
             AssetSource::Local(filename) => String::from("file://") + filename,
             AssetSource::Search(name) => String::from("search://") + name,
             AssetSource::Package(path) => String::from("package://") + path,
@@ -128,6 +129,8 @@ impl TryFrom<&str> for AssetSource {
             Ok(AssetSource::Search(uri.to_owned()))
         } else if let Some(uri) = s.strip_prefix("package://") {
             Ok(AssetSource::Package(uri.to_owned()))
+        } else if let Some(uri) = s.strip_prefix("https://") {
+            Ok(AssetSource::RCC(uri.to_owned()))
         } else {
             Err(format!("Unsupported asset type: {}", s))
         }

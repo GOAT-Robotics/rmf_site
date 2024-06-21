@@ -17,6 +17,7 @@
 
 use crate::{
     interaction::Selectable,
+    log,
     shapes::make_flat_rect_mesh,
     site::{
         get_current_workspace_path, Anchor, DefaultFile, FiducialMarker, GlobalDrawingVisibility,
@@ -94,6 +95,7 @@ pub fn add_drawing_visuals(
         Some(file_path) => file_path,
         None => PathBuf::new(),
     };
+
     for (e, source) in &changed_drawings {
         // Append file name to path if it's a local file
         // TODO(luca) cleanup
@@ -115,7 +117,10 @@ pub fn add_drawing_visuals(
                 continue;
             }
         };
-        let texture_handle: Handle<Image> = asset_server.load(asset_path);
+        log(&format!("Asset Path : {}", asset_path.as_str()));
+        let texture_handle: Handle<Image> = asset_server
+            .load("https://cdn.goat-robotics.xyz/goatrobotics/map/qQQLaTy0Bn/first_floor.png");
+        log("loaded asset");
         commands.entity(e).insert(LoadingDrawing(texture_handle));
     }
 }
@@ -143,8 +148,9 @@ pub fn handle_loaded_drawing(
     for (entity, source, pose, pixels_per_meter, handle, vis, parent, rank) in
         loading_drawings.iter()
     {
+        log(&format!("Handle id {:?}", handle.id()));
         let Some(load_state) = asset_server.get_load_state(handle.id()) else {
-            warn!("Handle for drawing with source {:?} not found", source);
+            error!("Handle for drawing with source {:?} not found", source);
             continue;
         };
         match load_state {

@@ -110,6 +110,7 @@ fn compute_model_source<'a, 'b>(
                 }
             }
             AssetSource::RCC(ref mut p) => {
+                // TODO: Load 3d model of robot from RCC
                 return Err(SdfError::UnsupportedAssetSource(format!(
                     "Unable to extract organization name from asset source [{}]",
                     subasset_uri
