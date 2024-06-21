@@ -25,7 +25,7 @@ pub struct YamlData {
     pub mode: String,
     pub image: String,
     pub negate: u8,
-    pub origin: Vec<f64>,
+    pub origin: [f32; 3],
     pub resolution: f64,
     pub free_thresh: f64,
     pub occupied_thresh: f64,
@@ -150,6 +150,10 @@ pub fn load_milestones(map: Maps, level: &mut RangeFrom<u32>, commands: &mut Com
             name: NameInSite(map.name.clone()),
             pixels_per_meter: rmf_site_format::PixelsPerMeter(20.0),
             source: rmf_site_format::AssetSource::RCC(map.image_url.clone()),
+            pose: rmf_site_format::Pose {
+                trans: map.yaml_data.origin,
+                ..Default::default()
+            },
             ..Default::default()
         }))
         .insert(SiteID(level.next().unwrap()));
