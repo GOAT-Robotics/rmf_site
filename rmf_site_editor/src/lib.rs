@@ -1,13 +1,20 @@
+extern crate console_error_panic_hook;
+
 use bevy::{
-    log::LogPlugin, pbr::DirectionalLightShadowMap, prelude::*, render::renderer::RenderAdapterInfo,
+    log::LogPlugin, pbr::DirectionalLightShadowMap, prelude::*, render::{mesh::shape::Cube, renderer::RenderAdapterInfo},
 };
 use bevy_egui::EguiPlugin;
+
 use main_menu::MainMenuPlugin;
+use std::panic;
+
 // use warehouse_generator::WarehouseGeneratorPlugin;
 #[cfg(not(target_arch = "wasm32"))]
 use clap::Parser;
+
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::*;
+use wasm_bindgen::JsValue;
 
 pub mod aabb;
 pub mod animate;
@@ -66,6 +73,33 @@ use bevy::render::{
 };
 pub use osm_slippy_map::*;
 
+pub mod rcc;
+
+use crate::main_menu::UploadData;
+use crate::main_menu::WebAutoLoad;
+
+use crate::rcc::{set_site_mode,is_site_in_view_mode};
+
+// Define a struct to keep some information about our entity.
+// Here it's an arbitrary movement speed, the spawn location, and a maximum distance from it.
+#[derive(Component)]
+struct Movable {
+    spawn: Vec3,
+    max_distance: f32,
+    speed: f32,
+}
+
+// Implement a utility function for easier Movable struct creation.
+impl Movable {
+    fn new(spawn: Vec3) -> Self {
+        Movable {
+            spawn,
+            max_distance: 5.0,
+            speed: 2.0,
+        }
+    }
+}
+
 #[cfg_attr(not(target_arch = "wasm32"), derive(Parser))]
 pub struct CommandLineArgs {
     /// Filename of a Site (.site.ron) or Building (.building.yaml) file to load.
@@ -105,17 +139,117 @@ impl AppState {
         })
     }
 }
+#[cfg(target_arch = "wasm32")]
+#[wasm_bindgen]
+extern "C" {
+    #[wasm_bindgen(js_namespace = console)]
+    pub fn log(s: &str);
+
+    #[wasm_bindgen(js_namespace = window)]
+    pub fn save_site_map(id: &str, s: &str);
+
+    #[wasm_bindgen(js_namespace = window)]
+    pub fn save_nav_graph(id: &str, name: &str, s: &str);
+
+    #[wasm_bindgen(js_namespace = window)]
+    pub fn get_map_list() -> js_sys::Array;
+
+    #[wasm_bindgen(js_namespace = window)]
+    pub fn send_nav_graph_total(total: &js_sys::Number);
+
+    #[wasm_bindgen(js_namespace = window)]
+    pub fn site_mode() -> js_sys::JsString;
+
+    #[wasm_bindgen(js_namespace = window)]
+    pub fn get_robots_list() -> js_sys::Array;
+
+    #[wasm_bindgen(js_namespace = window)]
+    pub fn get_robot_initial_pose(id: &str) -> js_sys::Object;
+}
 
 #[cfg(target_arch = "wasm32")]
 #[wasm_bindgen]
 pub fn run_js() {
     extern crate console_error_panic_hook;
     std::panic::set_hook(Box::new(console_error_panic_hook::hook));
+
     run(vec!["web".to_owned()]);
 }
 
+#[cfg(target_arch = "wasm32")]
+#[wasm_bindgen]
+pub fn run_js_with_data(buffer: JsValue, file_type: JsValue, building_id: JsValue) {
+    panic::set_hook(Box::new(console_error_panic_hook::hook));
+
+    use js_sys::Uint8Array;
+
+    #[cfg(target_arch = "wasm32")]
+    log("Running RCC RMF Site Editor with map data");
+    set_site_mode();
+    
+
+    let array = Uint8Array::new(&buffer);
+    let bytes: Vec<u8> = array.to_vec();
+
+    let file_type: String = file_type.as_string().unwrap();
+    let building_id: String = building_id.as_string().unwrap();
+
+    let mut app: App = App::new();
+
+    app.insert_resource(WebAutoLoad::file(bytes, file_type));
+    app.insert_resource(UploadData::new(building_id));
+    app.add_plugins(SiteEditor);
+
+    if is_site_in_view_mode() {
+        app.add_systems(Startup, set_initial_robot_pose);
+        app.add_systems(Update, update_robot_pose);
+    }
+
+    app.run();
+}
+
+#[cfg(target_arch = "wasm32")]
+#[wasm_bindgen]
+pub fn run_js_new_site(building_id: JsValue) {
+    panic::set_hook(Box::new(console_error_panic_hook::hook));
+
+    #[cfg(target_arch = "wasm32")]
+    log("Running RCC RMF Site Editor for new workspace");
+    let building_id: String = building_id.as_string().unwrap();
+
+    let mut app: App = App::new();
+
+    app.insert_resource(UploadData::new(building_id));
+    app.add_plugins(SiteEditor);
+    app.run();
+}
+
+#[cfg(target_arch = "wasm32")]
+#[wasm_bindgen]
+pub fn send_robot_pose(robot_id: JsValue,robot_pose: js_sys::Object) {
+    panic::set_hook(Box::new(console_error_panic_hook::hook));
+
+    #[cfg(target_arch = "wasm32")]
+    let robot_id: String = robot_id.as_string().unwrap();
+   
+   
+    match rcc::parse_robot_pose(&robot_pose) {
+        Ok(obj)=>{
+            rcc::add_robot_pose_by_id(robot_id,obj);
+        },
+        Err(err)=>{
+            #[cfg(target_arch = "wasm32")]
+            {
+                log( &format!("Error parsing  robot pose: {}", err));
+            }
+        }
+    }
+
+}
+
 pub fn run(command_line_args: Vec<String>) {
-    let mut app = App::new();
+    panic::set_hook(Box::new(console_error_panic_hook::hook));
+    let mut app: App = App::new();
 
     #[cfg(not(target_arch = "wasm32"))]
     {
@@ -144,7 +278,7 @@ impl Plugin for SiteEditor {
                     .disable::<LogPlugin>()
                     .set(WindowPlugin {
                         primary_window: Some(Window {
-                            title: "RMF Site Editor".to_owned(),
+                            title: "RCC RMF Site Editor".to_owned(),
                             canvas: Some(String::from("#rmf_site_editor_canvas")),
                             fit_canvas_to_parent: true,
                             ..default()
@@ -195,6 +329,7 @@ impl Plugin for SiteEditor {
                     .add_after::<bevy::asset::AssetPlugin, _>(SiteAssetIoPlugin),
             );
         }
+
         app.insert_resource(DirectionalLightShadowMap { size: 2048 })
             .add_state::<AppState>()
             .add_plugins((
@@ -219,5 +354,80 @@ impl Plugin for SiteEditor {
                 OSMViewPlugin,
                 SiteWireframePlugin,
             ));
+    }
+}
+
+fn set_initial_robot_pose(mut commands: Commands, mut meshes: ResMut<Assets<Mesh>>) {
+    let entity_spawn = Vec3::ZERO;
+    let robot_list = get_robots_list().clone();
+
+    for i in 0..robot_list.length() {
+        match rcc::parse_robot_data(&robot_list.get(i)) {
+            Ok(robot_id)=>{
+                //Add robot to the hashMap for later use
+                rcc::add_robot_in_robot_list(&robot_id, i);
+
+                 //Get robot's initial pose
+                 let robot_pose = get_robot_initial_pose(&robot_id);
+
+                 //Parse robot's pose & spawn
+                 match rcc::parse_robot_pose(&robot_pose) {
+                    Ok(obj)=>{
+                        commands.spawn((
+                            PbrBundle {
+                                mesh: meshes.add(Mesh::from(shape::Cube {
+                                    ..Default::default()
+                                })),
+                                transform: Transform::from_xyz(obj.x, obj.y, 0.0),
+                                ..default()
+                            },
+                            Movable::new(entity_spawn),
+                        ));
+                    },
+                    Err(err)=>{
+                        #[cfg(target_arch = "wasm32")]
+                        {
+                            log( &format!("Error parsing  robot pose: {}", err));
+                        }
+                    }
+                }
+            },
+            Err(err)=>{
+                #[cfg(target_arch = "wasm32")]
+                {
+                    log( &format!("Error parsing  robot list items JSON: {}", err));
+                }
+            }
+        }
+    }
+}
+
+
+
+fn update_robot_pose(mut cubes: Query<(&mut Transform, &mut Movable)>, timer: Res<Time>) {
+    
+    let mut index:u32 = 0;
+    for (mut transform, mut cube) in &mut cubes {
+        if let Some(robot_id) = rcc::get_robot_id(index) {
+            
+            if let Some(robot_pose) = rcc::get_robot_pose_by_id(&robot_id) {
+                
+                let target_position = Vec3::new(robot_pose.x, robot_pose.y, 0.0);
+                let direction = (target_position - transform.translation).normalize();
+
+                // Update the position only if the robot has not reached the position yet
+                if !(transform.translation.distance(target_position) <= cube.speed * timer.delta_seconds()) {
+                    transform.translation += direction * cube.speed * timer.delta_seconds();
+                }
+                
+            } else {
+                log("unable to get robot pose");
+            }
+           
+        } else {
+            log("unable to get robot id");
+        }
+
+        index += 1;
     }
 }
