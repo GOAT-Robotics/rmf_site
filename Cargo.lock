@@ -4113,6 +4113,7 @@ dependencies = [
  "gz-fuel",
  "itertools 0.12.1",
  "pathdiff",
+ "rand",
  "rfd",
  "rmf_site_format",
  "sdformat_rs",

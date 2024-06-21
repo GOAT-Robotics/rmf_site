@@ -91,7 +91,9 @@ fn compute_model_source<'a, 'b>(
             AssetSource::try_from(load_context.asset_path().to_string().as_str())
                 .map_err(SdfError::UnsupportedAssetSource)?;
         match asset_source {
-            AssetSource::Remote(ref mut p) | AssetSource::Search(ref mut p) => {
+            AssetSource::Remote(ref mut p)
+            | AssetSource::Search(ref mut p)
+            | AssetSource::RCC(ref mut p) => {
                 // When working with AssetSource::Remote and AssetSource::Search types, the form is
                 // `Organization/ModelName/path_to_file.ext`, hence we substitute the part after `Organization/`
                 // with the content of the model:// path.

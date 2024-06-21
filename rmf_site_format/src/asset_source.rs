@@ -32,6 +32,7 @@ pub enum AssetSource {
     Local(String),
     Remote(String),
     Search(String),
+    RCC(String),
     Package(String),
 }
 
@@ -40,6 +41,7 @@ impl AssetSource {
         match self {
             Self::Local(_) => "Local",
             Self::Remote(_) => "Remote",
+            Self::RCC(_) => "RCC",
             Self::Search(_) => "Search",
             Self::Package(_) => "Package",
         }
@@ -86,6 +88,7 @@ impl AssetSource {
             AssetSource::Remote(uri) => String::from("rmf-server://") + uri,
             AssetSource::Local(filename) => String::from("file://") + filename,
             AssetSource::Search(name) => String::from("search://") + name,
+            AssetSource::RCC(name) => String::from("https://") + name,
             AssetSource::Package(path) => String::from("package://") + path,
         }
     }
@@ -125,6 +128,8 @@ impl TryFrom<&str> for AssetSource {
             Ok(AssetSource::Search(uri.to_owned()))
         } else if let Some(uri) = s.strip_prefix("package://") {
             Ok(AssetSource::Package(uri.to_owned()))
+        } else if let Some(uri) = s.strip_prefix("https://") {
+            Ok(AssetSource::RCC(uri.to_owned()))
         } else {
             Err(format!("Unsupported asset type: {}", s))
         }
@@ -158,6 +163,9 @@ impl Recall for RecallAssetSource {
             }
             AssetSource::Search(name) => {
                 self.search_name = Some(name.clone());
+            }
+            AssetSource::RCC(name) => {
+                self.remote_uri = Some(name.clone());
             }
             AssetSource::Package(path) => {
                 self.package_path = Some(path.clone());

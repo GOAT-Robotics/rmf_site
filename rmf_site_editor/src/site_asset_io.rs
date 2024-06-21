@@ -113,6 +113,8 @@ async fn fetch_asset<'a>(
         .map_err(|e| AssetReaderError::Io(io::Error::new(io::ErrorKind::Other, e.to_string())))?
         .bytes;
 
+    info!("bytes of image {:?}", bytes);
+
     match serde_json::from_slice::<FuelErrorMsg>(&bytes) {
         Ok(error) => {
             return Err(AssetReaderError::Io(io::Error::new(
@@ -170,6 +172,7 @@ where
     F: Fn(&Path) -> BoxedFuture<'_, Result<Box<Reader<'_>>, AssetReaderError>> + Sync + 'static,
 {
     pub fn new(reader: F) -> Self {
+        warn!("Called new site asset reader");
         Self {
             default_reader: (AssetSourceBuilder::platform_default("assets", None)
                 .reader
@@ -190,6 +193,7 @@ where
         &'a self,
         path: &'a Path,
     ) -> BoxedFuture<'a, Result<Box<Reader<'a>>, AssetReaderError>> {
+        info!("reading asset data");
         (self.reader)(path)
     }
 
@@ -255,6 +259,38 @@ impl Plugin for SiteAssetIoPlugin {
                         Err(e) => return Box::pin(async move { Err(e) }),
                     };
 
+                    // It cannot be found locally, so let's try to fetch it from the
+                    // remote server
+                    Box::pin(async move { fetch_asset(remote_url, asset_name).await })
+                }))
+            }),
+        )
+        .register_asset_source(
+            "https",
+            BevyAssetSource::build().with_reader(|| {
+                Box::new(SiteAssetReader::new(|path: &Path| {
+                    warn!("so when does it gets called https");
+                    info!("loading path in asset io {}", path.to_str().unwrap());
+                    let remote_url = format!("https://{}", path.to_str().unwrap());
+                    info!("remote url is {}", remote_url);
+                    let asset_name = String::from("Map File");
+
+                    Box::pin(async move { fetch_asset(remote_url, asset_name).await })
+                }))
+            }),
+        )
+        .register_asset_source(
+            "rcc",
+            BevyAssetSource::build().with_reader(|| {
+                Box::new(SiteAssetReader::new(|path: &Path| {
+                    // Order should be:
+                    // Relative to the building.yaml location
+                    // Relative to the MODEL_ENVIRONMENT_VARIABLE path
+                    // Relative to a cache directory
+                    // Attempt to fetch from the server and save it to the cache directory
+                    warn!("so when does it gets called 7777");
+                    let remote_url = format!("https://{}", path.to_str().unwrap());
+                    let asset_name = String::from("Map File");
                     // It cannot be found locally, so let's try to fetch it from the
                     // remote server
                     Box::pin(async move { fetch_asset(remote_url, asset_name).await })
