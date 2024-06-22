@@ -16,7 +16,11 @@
 */
 
 use crate::{interaction::Selectable, shapes::*, site::*, RecencyRanking};
-use bevy::{math::Affine3A, prelude::*, render::mesh::PrimitiveTopology};
+use bevy::{
+    math::Affine3A,
+    prelude::*,
+    render::mesh::{Indices, PrimitiveTopology},
+};
 use geo::{
     geometry::{LineString, MultiPolygon, Polygon},
     BooleanOps, CoordsIter, TriangulateSpade,
