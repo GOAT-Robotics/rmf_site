@@ -33,7 +33,6 @@ pub enum AssetSource {
     Remote(String),
     RCC(String),
     Search(String),
-    RCC(String),
     Package(String),
 }
 
@@ -89,7 +88,7 @@ impl AssetSource {
             AssetSource::Remote(uri) => String::from("rmf-server://") + uri,
             AssetSource::Local(filename) => String::from("file://") + filename,
             AssetSource::Search(name) => String::from("search://") + name,
-            AssetSource::RCC(name) => String::from("https://") + name,
+            AssetSource::RCC(uri) => String::from(uri),
             AssetSource::Package(path) => String::from("package://") + path,
         }
     }
@@ -100,7 +99,6 @@ impl Default for AssetSource {
         AssetSource::Local(String::new()).into()
     }
 }
-
 
 #[cfg(feature = "bevy")]
 impl TryFrom<&AssetSource> for String {
@@ -163,14 +161,11 @@ impl Recall for RecallAssetSource {
             AssetSource::Remote(uri) => {
                 self.remote_uri = Some(uri.clone());
             }
-              AssetSource::RCC(uri) => {
+            AssetSource::RCC(uri) => {
                 self.remote_uri = Some(uri.clone());
             }
             AssetSource::Search(name) => {
                 self.search_name = Some(name.clone());
-            }
-            AssetSource::RCC(name) => {
-                self.remote_uri = Some(name.clone());
             }
             AssetSource::Package(path) => {
                 self.package_path = Some(path.clone());

@@ -55,7 +55,6 @@ impl<'a> InspectAssetSource<'a> {
             AssetSource::Remote(uri) => uri,
             AssetSource::RCC(uri) => uri,
             AssetSource::Search(name) => name,
-            AssetSource::RCC(name) => name,
             AssetSource::Package(path) => path,
         };
         ui.horizontal(|ui| {
@@ -68,7 +67,6 @@ impl<'a> InspectAssetSource<'a> {
                         AssetSource::Remote(assumed_source.clone()),
                         AssetSource::RCC(assumed_source.clone()),
                         AssetSource::Search(assumed_source.clone()),
-                        AssetSource::RCC(assumed_source.clone()),
                         AssetSource::Package(assumed_source.clone()),
                     ] {
                         ui.selectable_value(&mut new_source, variant.clone(), variant.label());
@@ -141,23 +139,26 @@ impl<'a> InspectAssetSource<'a> {
                     let map_list = get_map_list().clone();
 
                     if *uri != "" {
-                        //load previously selected map by default 
+                        //load previously selected map by default
                         for i in 0..map_list.length() {
                             match rcc::parse_js_value(&map_list.get(i)) {
-                                Ok(obj)=>{
+                                Ok(obj) => {
                                     if obj.image_url == *uri {
                                         new_map_index = i;
                                         break;
                                     }
-                                },
-                                Err(err)=>{
+                                }
+                                Err(err) => {
                                     #[cfg(target_arch = "wasm32")]
                                     {
-                                        log( &format!("Error parsing  map list items JSON: {}", err));
+                                        log(&format!(
+                                            "Error parsing  map list items JSON: {}",
+                                            err
+                                        ));
                                     }
                                 }
                             }
-                        }   
+                        }
                     }
 
                     match rcc::parse_js_value(&map_list.get(new_map_index)) {
@@ -214,9 +215,6 @@ impl<'a> InspectAssetSource<'a> {
                 }
             }
             AssetSource::Search(name) => {
-                ui.text_edit_singleline(name);
-            }
-            AssetSource::RCC(name) => {
                 ui.text_edit_singleline(name);
             }
             AssetSource::Package(path) => {

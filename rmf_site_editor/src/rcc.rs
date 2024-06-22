@@ -3,10 +3,9 @@ use crate::{
     site_mode, JsValue, WorkspaceMarker,
 };
 use bevy::prelude::{Commands, SpatialBundle};
-use bevy_utils::default;
 use once_cell::sync::Lazy;
 use rmf_site_format::{
-    Anchor, Category, DrawingProperties, Location, LocationTag, NameInSite, SiteID,
+    Anchor, Category, DrawingProperties, Location, LocationTag, LocationTags, NameInSite, SiteID,
 };
 use std::{
     collections::{BTreeMap, HashMap},
@@ -175,7 +174,7 @@ pub fn load_milestones(map: Maps, level: &mut RangeFrom<u32>, commands: &mut Com
             name: NameInSite(marker.1.props.text.clone()),
             graphs: rmf_site_format::AssociatedGraphs::All,
             anchor: rmf_site_format::Point(anchor),
-            tags: default(),
+            tags: LocationTags::default(),
         };
 
         if marker.1.props.is_charger {
