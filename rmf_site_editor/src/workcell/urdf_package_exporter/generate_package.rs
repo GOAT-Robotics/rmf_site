@@ -82,7 +82,7 @@ fn convert_and_copy_meshes(
 fn get_path_to_asset_file(asset_source: &AssetSource) -> Result<PathBuf, Box<dyn Error>> {
     match asset_source {
         AssetSource::Package(_) => Ok(urdf_rs::utils::expand_package_path(
-            &(String::from(asset_source)),
+            &(String::try_from(asset_source)?),
             None,
         )
         .to_string()
@@ -91,19 +91,16 @@ fn get_path_to_asset_file(asset_source: &AssetSource) -> Result<PathBuf, Box<dyn
             let mut asset_path = cache_path();
             asset_path.push(&asset_name);
             Ok(asset_path)
-        },
-        AssetSource::RCC(asset_name) => {
-            let mut asset_path = cache_path();
-            asset_path.push(&asset_name);
-            Ok(asset_path)
-        },
-        AssetSource::Local(path) => Ok(path.into()),
-        AssetSource::Search(_) | AssetSource::OSMTile { .. } | AssetSource::Bundled(_) => {
-            Err(IoError::new(
-                IoErrorKind::Unsupported,
-                "Not a supported asset type for exporting a workcell to a package",
-            ))?
         }
+        AssetSource::Local(path) => Ok(path.into()),
+        AssetSource::RCC(_) => Err(IoError::new(
+            IoErrorKind::Unsupported,
+            "Not a supported asset type for exporting a workcell to a package",
+        ))?,
+        AssetSource::Search(_) => Err(IoError::new(
+            IoErrorKind::Unsupported,
+            "Not a supported asset type for exporting a workcell to a package",
+        ))?,
     }
 }
 

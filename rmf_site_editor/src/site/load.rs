@@ -25,7 +25,7 @@ use thiserror::Error as ThisError;
 #[derive(Component, Clone, Debug, Deref)]
 pub struct DefaultFile(pub PathBuf);
 
-#[derive(Event)]
+#[derive(Event, Clone)]
 pub struct LoadSite {
     /// The site data to load
     pub site: rmf_site_format::Site,
@@ -33,6 +33,17 @@ pub struct LoadSite {
     pub focus: bool,
     /// The default file path that should be assigned to the site
     pub default_file: Option<PathBuf>,
+}
+
+impl LoadSite {
+    #[allow(non_snake_case)]
+    pub fn blank_L1(name: String, default_file: Option<PathBuf>) -> Self {
+        Self {
+            site: rmf_site_format::Site::blank_L1(name),
+            default_file,
+            focus: true,
+        }
+    }
 }
 
 #[derive(ThisError, Debug)]
@@ -360,7 +371,7 @@ pub fn load_site(
     mut load_sites: EventReader<LoadSite>,
     mut change_current_site: EventWriter<ChangeCurrentSite>,
 ) {
-    for cmd in load_sites.iter() {
+    for cmd in load_sites.read() {
         let site = match generate_site_entities(&mut commands, &cmd.site) {
             Ok(site) => site,
             Err(err) => {
@@ -615,7 +626,7 @@ pub fn import_nav_graph(
     mut params: ImportNavGraphParams,
     mut import_requests: EventReader<ImportNavGraphs>,
 ) {
-    for r in import_requests.iter() {
+    for r in import_requests.read() {
         if let Err(err) = generate_imported_nav_graphs(&mut params, r.into_site, &r.from_site) {
             error!("Failed to import nav graph: {err}");
         }
