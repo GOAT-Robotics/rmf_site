@@ -15,6 +15,7 @@
  *
 */
 
+use crate::rcc::is_site_in_view_mode;
 use crate::{
     interaction::{
         ChangeMode, HeadlightToggle, Hover, MoveTo, PickingBlockers, Select, SpawnPreview,
@@ -38,7 +39,6 @@ use bevy_egui::{
     EguiContexts,
 };
 use rmf_site_format::*;
-use crate::rcc::is_site_in_view_mode;
 
 pub mod create;
 use create::*;
@@ -410,6 +410,7 @@ fn site_ui_layout(
             &mut menu_params,
         );
 
+        #[cfg(not(target_arch = "wasm32"))]
         egui::TopBottomPanel::bottom("log_console")
             .resizable(true)
             .min_height(30.)
@@ -502,6 +503,7 @@ fn site_drawing_ui_layout(
         });
 
     if !is_site_in_view_mode() {
+        #[cfg(not(target_arch = "wasm32"))]
         egui::TopBottomPanel::bottom("log_console")
             .resizable(true)
             .min_height(30.)
@@ -585,6 +587,7 @@ fn site_visualizer_ui_layout(
                 });
         });
 
+        #[cfg(not(target_arch = "wasm32"))]
         egui::TopBottomPanel::bottom("log_console")
             .resizable(true)
             .min_height(30.)
@@ -657,6 +660,7 @@ fn workcell_ui_layout(
         });
 
     if !is_site_in_view_mode() {
+        #[cfg(not(target_arch = "wasm32"))]
         egui::TopBottomPanel::bottom("log_console")
             .resizable(true)
             .min_height(30.)

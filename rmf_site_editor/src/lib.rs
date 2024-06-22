@@ -192,7 +192,7 @@ pub fn run_js_with_data(buffer: JsValue, file_type: JsValue, building_id: JsValu
     use js_sys::Uint8Array;
 
     #[cfg(target_arch = "wasm32")]
-    log("Running RCC RMF Site Editor with map data");
+    info!("Running RCC RMF Site Editor with map data");
     set_site_mode();
 
     let array = Uint8Array::new(&buffer);
@@ -220,8 +220,7 @@ pub fn run_js_with_data(buffer: JsValue, file_type: JsValue, building_id: JsValu
 pub fn run_js_new_site(building_id: JsValue) {
     panic::set_hook(Box::new(console_error_panic_hook::hook));
 
-    #[cfg(target_arch = "wasm32")]
-    log("Running RCC RMF Site Editor for new workspace");
+    info!("Running RCC RMF Site Editor for new workspace");
     let building_id: String = building_id.as_string().unwrap();
 
     let mut app: App = App::new();
@@ -275,11 +274,11 @@ pub struct SiteEditor;
 
 impl Plugin for SiteEditor {
     fn build(&self, app: &mut App) {
-        app.add_plugins((
+        app.insert_resource(AssetMetaCheck::Never).add_plugins((
             SiteAssetIoPlugin,
             DefaultPlugins
                 .build()
-                .disable::<LogPlugin>()
+                //.disable::<LogPlugin>()
                 .set(WindowPlugin {
                     primary_window: Some(Window {
                         title: "RMF Site Editor".to_owned(),
@@ -314,7 +313,6 @@ impl Plugin for SiteEditor {
         ));
 
         app.insert_resource(DirectionalLightShadowMap { size: 2048 })
-            .insert_resource(AssetMetaCheck::Never)
             .add_state::<AppState>()
             .add_plugins((
                 AssetLoadersPlugin,

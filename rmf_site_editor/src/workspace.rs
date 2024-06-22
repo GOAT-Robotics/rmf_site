@@ -351,9 +351,6 @@ fn workspace_file_load_complete(
             WorkspaceData::LegacyBuilding(data) => {
                 info!("Opening legacy building map file");
 
-                #[cfg(target_arch = "wasm32")]
-                log("Opening legacy building map file");
-
                 match BuildingMap::from_bytes(&data) {
                     Ok(building) => {
                         match building.to_site() {

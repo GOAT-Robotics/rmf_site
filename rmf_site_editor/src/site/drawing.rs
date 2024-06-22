@@ -74,7 +74,7 @@ pub struct LoadingDelay(Timer);
 // We need to keep track of the drawing data until the image is loaded
 // since we will need to scale the mesh according to the size of the image
 #[derive(Component, Deref, DerefMut)]
-pub struct LoadingDrawing(String, #[deref] Handle<Image>);
+pub struct LoadingDrawing(Handle<Image>);
 
 fn drawing_layer_height(rank: Option<&RecencyRank<DrawingMarker>>) -> f32 {
     rank.map(|r| r.proportion() * (FLOOR_LAYER_START - DRAWING_LAYER_START) + DRAWING_LAYER_START)
@@ -120,16 +120,9 @@ pub fn add_drawing_visuals(
                 continue;
             }
         };
-        let log_id: String = rand::thread_rng().gen_range(100..999).to_string();
-
-        info!("{} :asset path is {}", log_id, asset_path);
-        let texture_handle: Handle<Image> = asset_server
-            .load("https://cdn.goat-robotics.xyz/goatrobotics/map/qQQLaTy0Bn/first_floor.png");
-        info!("{} :loaded asset handle", log_id);
-
-        commands
-            .entity(e)
-            .insert(LoadingDrawing(log_id, texture_handle));
+        info!("Asset path is {}", asset_path);
+        let texture_handle: Handle<Image> = asset_server.load(asset_path);
+        commands.entity(e).insert(LoadingDrawing(texture_handle));
     }
 }
 
@@ -155,28 +148,14 @@ pub fn handle_loaded_drawing(
     for (entity, source, pose, pixels_per_meter, handle, vis, parent, rank) in
         loading_drawings.iter()
     {
-        let log_id = &handle.0;
-
-        let handle_id = handle.id();
         let Some(load_state) = asset_server.get_load_state(handle.id()) else {
-            info!(
-                "{}: Handle for drawing with source {:?} not found",
-                log_id, source,
-            );
+            warn!("Handle for drawing with source {:?} not found", source,);
             continue;
         };
-        info!(
-            "{}: Checking if drawing with handle ID {:?} is added...",
-            log_id, handle_id
-        );
 
         match load_state {
-            LoadState::Loading => {
-                warn!("{}: Loading drawing...", log_id);
-            }
             LoadState::Loaded => {
-                info!("{}: Drawing loaded", log_id);
-                let img = assets.get(&handle.1).unwrap();
+                let img = assets.get(&handle.0).unwrap();
                 let width = img.texture_descriptor.size.width as f32;
                 let height = img.texture_descriptor.size.height as f32;
 
@@ -190,7 +169,7 @@ pub fn handle_loaded_drawing(
                     .flatten();
                 let (alpha, alpha_mode) = drawing_alpha(vis, rank, default);
                 let material = materials.add(StandardMaterial {
-                    base_color_texture: Some(handle.1.clone()),
+                    base_color_texture: Some(handle.0.clone()),
                     base_color: *Color::default().set_a(alpha),
                     alpha_mode,
                     perceptual_roughness: 0.089,
@@ -233,7 +212,7 @@ pub fn handle_loaded_drawing(
                     .remove::<LoadingDrawing>();
             }
             LoadState::Failed => {
-                error!("{}: Failed loading drawing {:?}", log_id, source);
+                error!("Failed loading drawing {:?}", source);
                 commands.entity(entity).remove::<LoadingDrawing>();
             }
             _ => {}
