@@ -16,6 +16,8 @@ use tracing::error;
 use serde::Deserialize;
 
 // RCC Map source related logics
+static PIXELS_PER_METER: f32 = 3779.5275590551;
+
 pub static mut MAP_INDEX: u32 = 0;
 pub static mut SHOW_MAP_ASSET_SOURCE: u32 = 0; // Display whether map dropdown or text box on selecting "RCC" AssetSource
 
@@ -25,7 +27,7 @@ pub struct YamlData {
     pub image: String,
     pub negate: u8,
     pub origin: [f32; 3],
-    pub resolution: f64,
+    pub resolution: f32,
     pub free_thresh: f64,
     pub occupied_thresh: f64,
 }
@@ -147,12 +149,10 @@ pub fn load_milestones(map: Maps, level: &mut RangeFrom<u32>, commands: &mut Com
     commands
         .spawn(DrawingBundle::new(DrawingProperties {
             name: NameInSite(map.name.clone()),
-            pixels_per_meter: rmf_site_format::PixelsPerMeter(20.0),
+            pixels_per_meter: rmf_site_format::PixelsPerMeter(
+                map.yaml_data.resolution / 10.0 * PIXELS_PER_METER,
+            ),
             source: rmf_site_format::AssetSource::RCC(map.image_url.clone()),
-            pose: rmf_site_format::Pose {
-                trans: map.yaml_data.origin,
-                ..Default::default()
-            },
             ..Default::default()
         }))
         .insert(SiteID(level.next().unwrap()));
