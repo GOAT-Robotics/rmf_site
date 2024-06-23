@@ -16,8 +16,6 @@ use tracing::error;
 use serde::Deserialize;
 
 // RCC Map source related logics
-static PIXELS_PER_METER: f32 = 3779.5275590551;
-
 pub static mut MAP_INDEX: u32 = 0;
 pub static mut SHOW_MAP_ASSET_SOURCE: u32 = 0; // Display whether map dropdown or text box on selecting "RCC" AssetSource
 
@@ -149,9 +147,7 @@ pub fn load_milestones(map: Maps, level: &mut RangeFrom<u32>, commands: &mut Com
     commands
         .spawn(DrawingBundle::new(DrawingProperties {
             name: NameInSite(map.name.clone()),
-            pixels_per_meter: rmf_site_format::PixelsPerMeter(
-                map.yaml_data.resolution / 10.0 * PIXELS_PER_METER,
-            ),
+            pixels_per_meter: rmf_site_format::PixelsPerMeter(20.0),
             source: rmf_site_format::AssetSource::RCC(map.image_url.clone()),
             ..Default::default()
         }))
