@@ -16,6 +16,7 @@
 */
 
 use crate::*;
+use bevy::log::warn;
 #[cfg(feature = "bevy")]
 use bevy::{
     asset::{AssetPath, ParseAssetPathError},
@@ -128,11 +129,13 @@ impl TryFrom<&str> for AssetSource {
             Ok(AssetSource::Search(uri.to_owned()))
         } else if let Some(uri) = s.strip_prefix("package://") {
             Ok(AssetSource::Package(uri.to_owned()))
-        } else if let Some(uri) = s.strip_prefix("https://") {
-            Ok(AssetSource::RCC(uri.to_owned()))
-        } else if let Some(uri) = s.strip_prefix("http://") {
+        } else if let Some(uri) = s
+            .strip_prefix("https://")
+            .or_else(|| s.strip_prefix("http://"))
+        {
             Ok(AssetSource::RCC(uri.to_owned()))
         } else {
+            warn!("Unsupported asset type {}", s);
             Err(format!("Unsupported asset type: {}", s))
         }
     }
