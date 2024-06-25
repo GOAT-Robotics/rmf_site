@@ -17,7 +17,9 @@ use serde::Deserialize;
 
 // RCC Map source related logics
 pub static mut MAP_INDEX: u32 = 0;
-pub static mut SHOW_MAP_ASSET_SOURCE: u32 = 0; // Display whether map dropdown or text box on selecting "RCC" AssetSource
+
+// Display whether map dropdown or text box on selecting "RCC" AssetSource
+pub static mut SHOW_MAP_ASSET_SOURCE: u32 = 0;
 
 #[derive(Debug, Deserialize, PartialEq)]
 pub struct YamlData {
@@ -138,6 +140,14 @@ pub fn add_robot_pose_by_id(id: String, pose: RobotPose) {
 }
 
 pub fn load_milestones(map: Maps, level: &mut RangeFrom<u32>, commands: &mut Commands) {
+    #[cfg(target_arch = "wasm32")]
+    {
+        crate::log(&format!(
+            "Loading {} markers from {}",
+            map.markers.len(),
+            map.name
+        ));
+    }
     let site_id = commands
         .spawn(SpatialBundle::HIDDEN_IDENTITY)
         .insert(Category::Site)
