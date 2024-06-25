@@ -266,7 +266,19 @@ impl Plugin for SiteAssetIoPlugin {
             BevyAssetSource::build().with_reader(|| {
                 Box::new(SiteAssetReader::new(|path: &Path| {
                     let remote_url = format!("https://{}", path.to_str().unwrap());
-                    info!("remote url is {}", remote_url);
+                    info!("https: remote url is {}", remote_url);
+                    let asset_name = String::from("Map File");
+
+                    Box::pin(async move { fetch_asset(remote_url, asset_name).await })
+                }))
+            }),
+        )
+        .register_asset_source(
+            "http",
+            BevyAssetSource::build().with_reader(|| {
+                Box::new(SiteAssetReader::new(|path: &Path| {
+                    let remote_url = format!("http://{}", path.to_str().unwrap());
+                    info!("http: remote url is {}", remote_url);
                     let asset_name = String::from("Map File");
 
                     Box::pin(async move { fetch_asset(remote_url, asset_name).await })

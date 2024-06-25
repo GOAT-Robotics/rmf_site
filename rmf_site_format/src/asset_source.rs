@@ -130,6 +130,8 @@ impl TryFrom<&str> for AssetSource {
             Ok(AssetSource::Package(uri.to_owned()))
         } else if let Some(uri) = s.strip_prefix("https://") {
             Ok(AssetSource::RCC(uri.to_owned()))
+        } else if let Some(uri) = s.strip_prefix("http://") {
+            Ok(AssetSource::RCC(uri.to_owned()))
         } else {
             Err(format!("Unsupported asset type: {}", s))
         }
