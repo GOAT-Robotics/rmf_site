@@ -108,6 +108,7 @@ pub fn add_drawing_visuals(
             )),
             _ => source.clone(),
         };
+        info!("Asset source is {:?}", asset_source);
         let asset_path = match String::try_from(&asset_source) {
             Ok(asset_path) => asset_path,
             Err(err) => {
