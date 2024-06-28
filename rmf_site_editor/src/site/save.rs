@@ -18,22 +18,19 @@
 use bevy::{
     ecs::{event::Events, system::SystemState},
     prelude::*,
+    utils::HashMap,
 };
+use serde::Serialize;
+use serde_json::json;
+use serde_json::Value;
 use std::{
     collections::{BTreeMap, BTreeSet},
     path::PathBuf,
 };
 use thiserror::Error as ThisError;
 
-use crate::{
-    log,
-    main_menu::{SaveToWeb, UploadData, WebAutoLoad},
-    recency::RecencyRanking,
-    save_nav_graph, save_site_map,send_nav_graph_total,
-    site::*,
-};
+use crate::{log, main_menu::UploadData, recency::RecencyRanking, save_site_data, site::*};
 use rmf_site_format::*;
-use js_sys::Number;
 
 #[derive(Event)]
 pub struct SaveSite {
@@ -1176,6 +1173,13 @@ fn migrate_relative_paths(
     }
 }
 
+#[derive(Serialize)]
+struct CombinedSiteData {
+    id: String,
+    site: Site,
+    nav_graph: Vec<HashMap<String, legacy::nav_graph::NavGraph>>,
+}
+
 pub fn generate_site(
     world: &mut World,
     site: Entity,
@@ -1226,7 +1230,7 @@ pub fn save_site(world: &mut World) {
         {
             let building_id: String = save_event.upload.building_id.unwrap();
 
-            log("save_site - Saving site event from web");
+            info!("save_site - Saving site event from web");
             let site = match generate_site(world, save_event.site) {
                 Ok(site) => site,
                 Err(err) => {
@@ -1235,33 +1239,33 @@ pub fn save_site(world: &mut World) {
                 }
             };
 
-            // convert site to json
-            let site_json = match serde_json::to_string(&site) {
+            let graphs = legacy::nav_graph::NavGraph::from_site(&site);
+            // Transform Vec<(String, Obj)> into Vec<HashMap<String, Obj>>
+            let nav_graph: Vec<HashMap<String, legacy::nav_graph::NavGraph>> = graphs
+                .into_iter()
+                .map(|(name, nav_graph)| {
+                    let mut map = HashMap::new();
+                    map.insert(name, nav_graph);
+                    map
+                })
+                .collect();
+
+            let combined_data = CombinedSiteData {
+                id: building_id,
+                site: site,
+                nav_graph: nav_graph,
+            };
+
+            let site_data_json = match serde_json::to_string(&combined_data) {
                 Ok(json) => json,
                 Err(err) => {
-                    error!("Unable to convert site to json: {err}");
+                    error!("Unable to convert nav graph to json: {err}");
                     continue;
                 }
             };
 
-            let total = legacy::nav_graph::NavGraph::from_site(&site).len();
-            let js_number = Number::from(total as f64);
-            send_nav_graph_total(&js_number);
-
-            for (name, nav_graph) in legacy::nav_graph::NavGraph::from_site(&site) {
-                // convert to yaml using serde yaml
-                let nav_graph_json = match serde_json::to_string(&nav_graph) {
-                    Ok(json) => json,
-                    Err(err) => {
-                        error!("Unable to convert nav graph to json: {err}");
-                        continue;
-                    }
-                };
-                save_nav_graph(&building_id, name.as_str(), nav_graph_json.as_str());
-            }
-
             // send site to web
-            save_site_map(&building_id, site_json.as_str());
+            save_site_data(site_data_json.as_str());
         }
 
         #[cfg(not(target_arch = "wasm32"))]
