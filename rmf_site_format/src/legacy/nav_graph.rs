@@ -245,6 +245,8 @@ pub struct NavLaneProperties {
     pub door_name: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub orientation_constraint: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub is_bidirectional: Option<bool>,
     // TODO(luca): Add other lane properties
     // demo_mock_floor_name
     // mutex
@@ -264,10 +266,15 @@ impl NavLaneProperties {
                 None
             }
         };
+        let is_bidirectional = matches!(motion.orientation_constraint, 
+            OrientationConstraint::None | 
+            OrientationConstraint::RelativeYaw(_) | 
+            OrientationConstraint::AbsoluteYaw(_));
         Self {
             speed_limit: motion.speed_limit.unwrap_or(0.0),
             dock_name: motion.dock.as_ref().map(|d| d.name.clone()),
             orientation_constraint,
+            is_bidirectional: if is_bidirectional { None } else { Some(false) },
             door_name,
         }
     }
