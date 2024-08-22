@@ -1177,7 +1177,7 @@ fn migrate_relative_paths(
 struct CombinedSiteData {
     id: String,
     site: Site,
-    nav_graph: Vec<HashMap<String, legacy::nav_graph::NavGraph>>,
+    nav_graph: HashMap<String, legacy::nav_graph::NavGraph>,
 }
 
 pub fn generate_site(
@@ -1241,14 +1241,8 @@ pub fn save_site(world: &mut World) {
 
             let graphs = legacy::nav_graph::NavGraph::from_site(&site);
             // Transform Vec<(String, Obj)> into Vec<HashMap<String, Obj>>
-            let nav_graph: Vec<HashMap<String, legacy::nav_graph::NavGraph>> = graphs
-                .into_iter()
-                .map(|(name, nav_graph)| {
-                    let mut map = HashMap::new();
-                    map.insert(name, nav_graph);
-                    map
-                })
-                .collect();
+            let nav_graph: HashMap<String, legacy::nav_graph::NavGraph> =
+                graphs.into_iter().collect();
 
             let combined_data = CombinedSiteData {
                 id: building_id,
