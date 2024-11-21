@@ -32,26 +32,61 @@ pub struct YamlData {
     pub occupied_thresh: f64,
 }
 
-#[derive(Debug, Deserialize, PartialEq)]
-pub struct Marker {
+use serde::Serialize;
+
+// Struct for Position
+#[derive(Serialize, Deserialize, Debug)]
+pub struct Position {
     pub x: f32,
     pub y: f32,
-    pub props: Props,
+    pub z: f32,
 }
 
-#[derive(Debug, Deserialize, PartialEq)]
-pub struct Props {
-    pub text: String,
-    pub is_charger: bool,
+// Struct for Orientation
+#[derive(Serialize, Deserialize, Debug)]
+pub struct Orientation {
+    pub w: f32,
+    pub x: f32,
+    pub y: f32,
+    pub z: f32,
 }
 
-#[derive(Debug, Deserialize, PartialEq)]
+// Struct for Pose, which includes Position and Orientation
+#[derive(Serialize, Deserialize, Debug)]
+pub struct Pose {
+    pub position: Position,
+    pub orientation: Orientation,
+}
+
+// Struct for Marker, which includes id, name, Pose, is_charger, and markerType
+#[derive(Serialize, Deserialize, Debug)]
+pub struct Marker {
+    pub id: String,
+    pub name: String,
+    pub pose: Pose,
+    pub marker_type: Vec<String>, // Empty array in your example, but it's a Vec of Strings
+}
+
+// Top-level structure for the list of markers
+#[derive(Serialize, Deserialize, Debug)]
+pub struct Markers {
+    pub markers: Vec<Marker>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct Metadata {
+    pub height: f32,
+    pub width: f32,
+}
+
+#[derive(Debug, Deserialize)]
 pub struct Maps {
     pub id: String,
     pub name: String,
     pub image_url: String,
+    pub metadata: Metadata,
     pub yaml_data: YamlData,
-    pub markers: HashMap<String, Marker>,
+    pub markers: Vec<Marker>,
 }
 
 pub fn set_selected_map_index(map_index: u32) {
@@ -166,30 +201,30 @@ pub fn load_milestones(map: Maps, level: &mut RangeFrom<u32>, commands: &mut Com
     let mut anchors: BTreeMap<u32, Anchor> = BTreeMap::new();
     let mut locations = BTreeMap::new();
 
-    let mut tags = Vec::new();
-    tags.push(LocationTag::Charger);
-
     map.markers.iter().for_each(|marker| {
         let anchor = level.next().unwrap();
-        anchors.insert(
-            anchor,
-            [
-                ((marker.1.x + 5.0) * 0.05),
-                -(((marker.1.y + 5.0) * 0.05) - (0.34617525 / 2.0) + (0.14235048) + 0.02),
-            ]
-            .into(),
-        );
+        let x_value = (marker.pose.position.x - map.yaml_data.origin[0]) + 0.20; //add 0.20 to x value for marker icon width;
+        let y_offset = map.yaml_data.origin[1] + (map.metadata.height * map.yaml_data.resolution);
+        let y_value = marker.pose.position.y - y_offset;
+
+        anchors.insert(anchor, [x_value, y_value].into());
 
         let mut location = Location {
-            name: NameInSite(marker.1.props.text.clone()),
+            name: NameInSite(marker.name.clone()),
             graphs: rmf_site_format::AssociatedGraphs::All,
             anchor: rmf_site_format::Point(anchor),
             tags: LocationTags::default(),
         };
 
-        if marker.1.props.is_charger {
-            location.tags = rmf_site_format::LocationTags(tags.clone());
-        }
+        marker.marker_type.iter().for_each(|marker_type| {
+            if marker_type.to_uppercase() == "CHARGER" {
+                location.tags.push(LocationTag::Charger);
+            } else if marker_type.to_uppercase() == "PARKING" {
+                location.tags.push(LocationTag::ParkingSpot);
+            } else if marker_type.to_uppercase() == "HOLDING" {
+                location.tags.push(LocationTag::HoldingPoint);
+            }
+        });
 
         locations.insert(level.next().unwrap(), location);
     });
