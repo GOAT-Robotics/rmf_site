@@ -159,6 +159,7 @@ impl NavGraph {
                         NavDoor {
                             map: level.properties.name.0.clone(),
                             endpoints: [*v0, *v1],
+                            door_properties: door.kind.to_owned(),
                         },
                     );
                 }
@@ -340,6 +341,7 @@ fn is_false(b: &bool) -> bool {
 pub struct NavDoor {
     pub endpoints: [[f32; 2]; 2],
     pub map: String,
+    pub door_properties: DoorType,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
